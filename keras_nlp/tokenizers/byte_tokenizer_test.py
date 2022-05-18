@@ -57,6 +57,11 @@ class ByteTokenizerTest(tf.test.TestCase):
             ],
         )
 
+    def test_detokenize_scalars(self):
+        tokenizer = ByteTokenizer()
+        output = tokenizer.detokenize([104, 101, 108, 108, 111])
+        self.assertAllEqual(output, "hello")
+
     def test_detokenize(self):
         input_data = tf.ragged.constant(
             [

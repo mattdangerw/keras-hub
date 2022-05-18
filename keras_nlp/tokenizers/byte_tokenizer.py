@@ -230,6 +230,8 @@ class ByteTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
         # Remove trailing padding tokens, so that trailing "\x00" bytes don't
         # show up in the detokenized output.
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))

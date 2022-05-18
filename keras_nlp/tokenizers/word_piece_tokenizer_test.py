@@ -58,6 +58,15 @@ class WordPieceTokenizerTest(tf.test.TestCase):
         detokenize_output = tokenizer.detokenize(input_data)
         self.assertAllEqual(detokenize_output, ["the quick brown fox"])
 
+    def test_detokenize_with_padding(self):
+        input_data = [[1, 2, 3, 4, 5, 6, 0], [1, 2, 3, 6, 0, 0, 0]]
+        vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
+        tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
+        detokenize_output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(
+            detokenize_output, ["the quick brown fox", "the quick fox"]
+        )
+
     def test_accessors(self):
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
         tokenizer = WordPieceTokenizer(vocabulary=vocab_data)
@@ -225,21 +234,15 @@ class WordPieceTokenizerTest(tf.test.TestCase):
     def test_no_oov_token_in_vocabulary(self):
         vocab_data = ["qu", "@@ick", "br", "@@OWN", "fox"]
         with self.assertRaises(RuntimeError):
-            WordPieceTokenizer(
-                vocabulary=vocab_data,
-            )
+            WordPieceTokenizer(vocabulary=vocab_data)
 
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]
         with self.assertRaises(RuntimeError):
-            WordPieceTokenizer(
-                vocabulary=vocab_data,
-            )
+            WordPieceTokenizer(vocabulary=vocab_data)
 
         vocab_data = ["UNK", "qu", "@@ick", "br", "@@OWN", "fox"]
         with self.assertRaises(RuntimeError):
-            WordPieceTokenizer(
-                vocabulary=vocab_data,
-            )
+            WordPieceTokenizer(vocabulary=vocab_data)
 
         with self.assertRaises(ValueError):
             WordPieceTokenizer(vocabulary=vocab_data, oov_token=None)

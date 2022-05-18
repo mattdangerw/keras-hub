@@ -308,6 +308,8 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
         inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         encoded_string = tf.strings.unicode_encode(
             inputs,

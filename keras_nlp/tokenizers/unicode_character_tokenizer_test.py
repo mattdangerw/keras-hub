@@ -99,6 +99,11 @@ class UnicodeCharacterTokenizerTest(tf.test.TestCase):
             self.assertAllEqual(call_output[i], exp_outputs[i])
             self.assertAllEqual(tokenize_output[i], exp_outputs[i])
 
+    def test_detokenize_scalars(self):
+        tokenizer = UnicodeCharacterTokenizer()
+        output = tokenizer.detokenize([104, 101, 108, 108, 111])
+        self.assertAllEqual(output, "hello")
+
     def test_detokenize(self):
         input_data = tf.ragged.constant(
             [

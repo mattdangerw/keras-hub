@@ -327,4 +327,8 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
         return tokens
 
     def detokenize(self, inputs):
+        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
+            inputs = tf.convert_to_tensor(inputs)
+        # Remove padding tokens.
+        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
         return self._fast_word_piece.detokenize(inputs)
