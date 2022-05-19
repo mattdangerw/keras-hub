@@ -288,8 +288,6 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
     def tokenize(self, inputs):
         # Check if Input is Scalar or Not
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
         scalar_input = tf.convert_to_tensor(inputs).shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
@@ -326,9 +324,5 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
-    def detokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-        # Remove padding tokens.
-        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
+    def detokenize(self, inputs, ids_to_strip=[0], return_stings=True):
         return self._fast_word_piece.detokenize(inputs)

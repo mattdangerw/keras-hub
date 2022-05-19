@@ -24,7 +24,7 @@ class SimpleTokenizer(Tokenizer):
     def tokenize(self, inputs):
         return tf.strings.split(inputs).to_tensor()
 
-    def detokenize(self, inputs):
+    def detokenize(self, inputs, ids_to_strip=[0], return_stings=True):
         return tf.strings.reduce_join([inputs], separator=" ", axis=-1)
 
 

@@ -269,9 +269,6 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
         return self.vocabulary_size
 
     def tokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-
         scalar_input = inputs.shape.rank == 0
         if scalar_input:
             inputs = tf.expand_dims(inputs, 0)
@@ -307,14 +304,10 @@ class UnicodeCharacterTokenizer(tokenizer.Tokenizer):
 
         return tokens
 
-    def detokenize(self, inputs):
-        if not isinstance(inputs, (tf.Tensor, tf.RaggedTensor)):
-            inputs = tf.convert_to_tensor(inputs)
-        inputs = tf.ragged.boolean_mask(inputs, tf.not_equal(inputs, 0))
-        encoded_string = tf.strings.unicode_encode(
+    def detokenize(self, inputs, ids_to_strip=[0], return_stings=True):
+        return tf.strings.unicode_encode(
             inputs,
             errors=self.errors,
             replacement_char=self.replacement_char,
             output_encoding=self.output_encoding,
         )
-        return encoded_string
