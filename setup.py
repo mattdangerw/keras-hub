@@ -29,7 +29,7 @@ setup(
     ),
     long_description=README,
     long_description_content_type="text/markdown",
-    version="0.2.0",
+    version="0.3.0",
     url="https://github.com/keras-team/keras-nlp",
     author="Keras team",
     author_email="keras-nlp@google.com",
@@ -37,9 +37,11 @@ setup(
     install_requires=[
         "absl-py",
         "numpy",
+        "opencv-python-headless==4.1.2.30",
         "packaging",
         "tensorflow",
         "tensorflow-text",
+        "tf-models-official>2.9.0",
     ],
     extras_require={
         "tests": [
