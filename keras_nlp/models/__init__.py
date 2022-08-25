@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from keras_nlp.models.bert import BertBase
+from keras_nlp.models.bert import BertClassificationHead
 from keras_nlp.models.bert import BertClassifier
-from keras_nlp.models.bert import BertCustom
+from keras_nlp.models.bert import BertCustomNetwork
+from keras_nlp.models.bert import BertNetwork
+from keras_nlp.models.bert import BertTokenizer
 from keras_nlp.models.roberta import RobertaBase
 from keras_nlp.models.roberta import RobertaClassifier
 from keras_nlp.models.roberta import RobertaCustom

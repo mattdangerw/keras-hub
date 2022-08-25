@@ -17,8 +17,11 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerEncoder
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.pipeline_model import PipelineModel
 
 
 def _bert_kernel_initializer(stddev=0.02):
@@ -46,7 +49,7 @@ checkpoints = {
 }
 
 
-class BertCustom(keras.Model):
+class BertCustomNetwork(keras.Model):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -57,7 +60,7 @@ class BertCustom(keras.Model):
 
     This class gives a fully customizable Bert model with any number of layers,
     heads, and embedding dimensions. For specific specific bert architectures
-    defined in the paper, see for example `keras_nlp.models.BertBase`.
+    defined in the paper, see for example `keras_nlp.models.BertNetwork`.
 
     Args:
         vocabulary_size: Int. The size of the token vocabulary.
@@ -81,7 +84,7 @@ class BertCustom(keras.Model):
     Example usage:
     ```python
     # Randomly initialized Bert encoder
-    model = keras_nlp.models.BertCustom(
+    model = keras_nlp.models.BertCustomNetwork(
         vocabulary_size=30522,
         num_layers=12,
         num_heads=12,
@@ -240,70 +243,14 @@ class BertCustom(keras.Model):
         return config
 
 
-class BertClassifier(keras.Model):
-    """Bert encoder model with a classification head.
-
-    Args:
-        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
-        num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
-            trainable.
-
-    Example usage:
-    ```python
-    # Randomly initialized Bert encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "input_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
-    classifier = bert.BertClassifier(model, 4, name="classifier")
-    logits = classifier(input_data)
-    ```
-    """
-
-    def __init__(
-        self,
-        base_model,
-        num_classes,
-        name=None,
-        trainable=True,
-    ):
-        inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
-        outputs = keras.layers.Dense(
-            num_classes,
-            kernel_initializer=_bert_kernel_initializer(),
-            name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
-        )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
-
-
-MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
-    using "{type}" architecture.
+def BertNetwork(
+    architecture="base",
+    weights="uncased_en",
+    vocabulary_size=None,
+    name=None,
+    trainable=True,
+):
+    """Bert
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -313,7 +260,6 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
     Args:
         weights: String, optional. Name of pretrained model to load weights.
-            Should be one of {names}.
             If None, model is randomly initialized. Either `weights` or
             `vocabulary_size` must be specified, but not both.
         vocabulary_size: Int, optional. The size of the token vocabulary. Either
@@ -324,8 +270,8 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 
     Example usage:
     ```python
-    # Randomly initialized BertBase encoder
-    model = keras_nlp.models.BertBase(vocabulary_size=10000)
+    # Randomly initialized BertNetwork encoder
+    model = keras_nlp.models.BertNetwork(vocabulary_size=10000)
 
     # Call encoder on the inputs.
     input_data = {{
@@ -338,24 +284,13 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     output = model(input_data)
 
     # Load a pretrained model
-    model = keras_nlp.models.BertBase(weights="uncased_en")
+    model = keras_nlp.models.BertNetwork(weights="uncased_en")
     # Call encoder on the inputs.
     output = model(input_data)
     ```
-"""
-
-
-def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
+    """
+    if architecture != "base":
+        raise ValueError("Only `architecture='base'` is currently supported.")
 
     if weights:
         if weights not in checkpoints["bert_base"]:
@@ -366,7 +301,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             )
         vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
 
-    model = BertCustom(
+    model = BertCustomNetwork(
         vocabulary_size=vocabulary_size,
         num_layers=12,
         num_heads=12,
@@ -390,14 +325,172 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
         )
         model.load_weights(filepath)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
-setattr(
-    BertBase,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(checkpoints["bert_base"])
-    ),
-)
+class BertTokenizer(WordPieceTokenizer):
+    """WordPieceTokenizer with pretrained Bert vocabularies.
+
+    This class is a specialized instance of
+    `keras_nlp.tokenizers.WordPieceTokenizer` which supports loading pre-trained
+    vocabularies to match pre-trained Bert models.
+
+    Args:
+        vocabulary: The name of the pre-trained vocabulary to load.
+    """
+
+    def __init__(
+        self,
+        vocabulary,
+    ):
+        if vocabulary:
+            vocabulary = keras.utils.get_file(
+                "vocab.txt",
+                BASE_PATH + "bert_base_" + vocabulary + "/vocab.txt",
+                cache_subdir="models/bert_base/" + vocabulary + "/",
+            )
+        super().__init__(vocabulary=vocabulary)
+
+        # Convenience accessors for special tokens.
+        self.pad_token = "[PAD]"
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.mask_token = "[MASK]"
+        self.pad_token_id = self.token_to_id(self.pad_token)
+        self.cls_token_id = self.token_to_id(self.cls_token)
+        self.sep_token_id = self.token_to_id(self.sep_token)
+        self.mask_token_id = self.token_to_id(self.mask_token)
+
+
+class BertClassificationHead(keras.layers.Layer):
+    """Bert classification head.
+
+    This layer should be called directly on the outputs of a
+    `keras_nlp.models.BertNetwork`, an will produce a output with shape
+
+
+    Args:
+        num_classes: Int. Number of classes to predict.
+        activation: The activation of the dense output layer. Usually this
+            should be set to either `None` for class logits, or "softmax" for
+            class probabilities.
+        name: String, optional. Name of the layer.
+    """
+
+    def __init__(
+        self,
+        num_classes,
+        activation="softmax",
+    ):
+        super().__init__()
+        self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
+
+        self.dense = keras.layers.Dense(
+            num_classes,
+            kernel_initializer=_bert_kernel_initializer(),
+            activation=self.activation,
+            name="logits",
+        )
+
+    def call(self, inputs):
+        return self.dense(inputs["pooled_output"])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
+            }
+        )
+        return config
+
+
+class BertClassifier(PipelineModel):
+    """Bert classification workflow.
+
+    This is a model which has preprocessing build in and is precompiled to
+    support easy Bert finetuning for classification tasks.
+
+    Args:
+        num_classes: Int. Number of classes to predict.
+        weights: The pretrained weight to load.
+        architecture: One of "base" or "large".
+        name: String, optional. Name of the model.
+        trainable: Boolean, optional. If the model's variables should be
+            trainable.
+    ```
+    """
+
+    def __init__(
+        self,
+        num_classes,
+        architecture="base",
+        weights="uncased_en",
+        sequence_length=512,
+        name=None,
+    ):
+        # Workflow components.
+        tokenizer = BertTokenizer(
+            vocabulary=weights,
+        )
+        packer = MultiSegmentPacker(
+            sequence_length=sequence_length,
+            start_value=tokenizer.cls_token_id,
+            end_value=tokenizer.sep_token_id,
+        )
+        network = BertNetwork(
+            architecture=architecture,
+            weights=weights,
+        )
+        head = BertClassificationHead(
+            num_classes=num_classes,
+            activation="softmax",
+        )
+
+        super().__init__(
+            inputs=network.input,
+            outputs=head(network(network.input)),
+            name=name,
+        )
+
+        # Config arguments.
+        self.architecture = architecture
+        self.num_classes = num_classes
+        self.sequence_length = sequence_length
+
+        # Component layers.
+        self.tokenizer = tokenizer
+        self.packer = packer
+        self.network = network
+        self.head = head
+
+        # Compile with reasonable defaults.
+        self.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=2e-5),
+            loss="sparse_categorical_crossentropy",
+            metrics=["sparse_categorical_accuracy"],
+            jit_compile=True,
+        )
+
+    # TODO(mattdangerw): figure out how to remove this.
+    def is_preprocessed(self, x):
+        return isinstance(x, dict)
+
+    def preprocess_features(self, x):
+        if self.is_preprocessed(x):
+            return x
+        if isinstance(x, str):
+            x = tf.convert_to_tensor(x)
+        if not isinstance(x, (list, tuple)):
+            x = [x]
+        input_ids, segment_ids = self.packer([self.tokenizer(s) for s in x])
+        if input_ids.shape.rank == 1:
+            input_ids = tf.expand_dims(input_ids, 0)
+            segment_ids = tf.expand_dims(segment_ids, 0)
+        return {
+            "input_ids": input_ids,
+            "segment_ids": segment_ids,
+            "input_mask": input_ids != 0,
+        }
