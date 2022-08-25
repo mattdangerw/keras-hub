@@ -17,8 +17,11 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerEncoder
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.pipeline_model import PipelineModel
 
 
 def _bert_kernel_initializer(stddev=0.02):
@@ -34,19 +37,19 @@ checkpoints = {
             "md5": "9b2b2139f221988759ac9cdd17050b31",
             "description": "Base size of Bert where all input is lowercased. "
             "Trained on English wikipedia + books corpora.",
-            "vocabulary_size": 30522,
+            "vocabulary": "https://storage.googleapis.com/cloud-tpu-checkpoints/bert/v3/uncased_L-12_H-768_A-12/vocab.txt",
         },
         "cased_en": {
             "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
             "description": "Base size of Bert where case is maintained. "
             "Trained on English wikipedia + books corpora.",
-            "vocabulary_size": 28996,
+            "vocabulary": None,
         },
     }
 }
 
 
-class BertCustom(keras.Model):
+class BertCustom(PipelineModel):
     """Bi-directional Transformer-based encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
@@ -60,7 +63,7 @@ class BertCustom(keras.Model):
     defined in the paper, see for example `keras_nlp.models.BertBase`.
 
     Args:
-        vocabulary_size: Int. The size of the token vocabulary.
+        vocabulary: A list or filename.
         num_layers: Int. The number of transformer layers.
         num_heads: Int. The number of attention heads for each transformer.
             The hidden size must be divisible by the number of attention heads.
@@ -82,7 +85,7 @@ class BertCustom(keras.Model):
     ```python
     # Randomly initialized Bert encoder
     model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
+        vocabulary="vocab.txt",
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -94,7 +97,7 @@ class BertCustom(keras.Model):
     # Call encoder on the inputs
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            shape=(1, 12), dtype=tf.int64, maxval=30522
         ),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -112,7 +115,7 @@ class BertCustom(keras.Model):
 
     def __init__(
         self,
-        vocabulary_size,
+        vocabulary,
         num_layers,
         num_heads,
         hidden_dim,
@@ -122,7 +125,17 @@ class BertCustom(keras.Model):
         num_segments=2,
         name=None,
         trainable=True,
+        include_preprocessing=True,
     ):
+        # Setup preprocessing.
+        tokenizer = WordPieceTokenizer(
+            vocabulary=vocabulary,
+        )
+        packer = MultiSegmentPacker(
+            sequence_length=128,
+            start_value=tokenizer.token_to_id("[CLS]"),
+            end_value=tokenizer.token_to_id("[SEP]"),
+        )
 
         # Index of classification token in the vocabulary
         cls_token_index = 0
@@ -139,7 +152,7 @@ class BertCustom(keras.Model):
 
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
-            input_dim=vocabulary_size,
+            input_dim=tokenizer.vocabulary_size(),
             output_dim=hidden_dim,
             embeddings_initializer=_bert_kernel_initializer(),
             name="token_embedding",
@@ -208,10 +221,13 @@ class BertCustom(keras.Model):
             },
             name=name,
             trainable=trainable,
+            include_preprocessing=include_preprocessing,
         )
         # All references to `self` below this line
+        self.tokenizer = tokenizer
+        self.packer = packer
         self.token_embedding = token_embedding_layer
-        self.vocabulary_size = vocabulary_size
+        self.vocabulary = vocabulary
         self.hidden_dim = hidden_dim
         self.intermediate_dim = intermediate_dim
         self.num_layers = num_layers
@@ -222,11 +238,29 @@ class BertCustom(keras.Model):
         self.dropout = dropout
         self.cls_token_index = cls_token_index
 
+    def preprocess_features(self, x):
+        # TODO(mattdangerw): figure out how to remove this line
+        if isinstance(x, dict):
+            return x
+        if isinstance(x, str):
+            x = tf.convert_to_tensor(x)
+        if not isinstance(x, (list, tuple)):
+            x = [x]
+        input_ids, segment_ids = self.packer([self.tokenizer(s) for s in x])
+        if input_ids.shape.rank == 1:
+            input_ids = tf.expand_dims(input_ids, 0)
+            segment_ids = tf.expand_dims(segment_ids, 0)
+        return {
+            "input_ids": input_ids,
+            "segment_ids": segment_ids,
+            "input_mask": input_ids != 0,
+        }
+
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "vocabulary_size": self.vocabulary_size,
+                "vocabulary": self.vocabulary,
                 "hidden_dim": self.hidden_dim,
                 "intermediate_dim": self.intermediate_dim,
                 "num_layers": self.num_layers,
@@ -240,7 +274,7 @@ class BertCustom(keras.Model):
         return config
 
 
-class BertClassifier(keras.Model):
+class BertClassifier(PipelineModel):
     """Bert encoder model with a classification head.
 
     Args:
@@ -254,7 +288,7 @@ class BertClassifier(keras.Model):
     ```python
     # Randomly initialized Bert encoder
     model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
+        vocabulary="vocab.txt",
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -265,7 +299,7 @@ class BertClassifier(keras.Model):
     # Call classifier on the inputs.
     input_data = {
         "input_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
+            shape=(1, 12), dtype=tf.int64, maxval=30522
         ),
         "segment_ids": tf.constant(
             [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
@@ -285,9 +319,12 @@ class BertClassifier(keras.Model):
         num_classes,
         name=None,
         trainable=True,
+        include_preprocessing=True,
     ):
         inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
+        pooled = base_model(inputs, include_preprocessing=False)[
+            "pooled_output"
+        ]
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=_bert_kernel_initializer(),
@@ -295,15 +332,21 @@ class BertClassifier(keras.Model):
         )(pooled)
         # Instantiate using Functional API Model constructor
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
+            inputs=inputs,
+            outputs=outputs,
+            name=name,
+            trainable=trainable,
+            include_preprocessing=include_preprocessing,
         )
         # All references to `self` below this line
         self.base_model = base_model
         self.num_classes = num_classes
 
+    def preprocess_features(self, x):
+        return self.base_model.preprocess_features(x)
 
-MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
-    using "{type}" architecture.
+
+MODEL_DOCSTRING = """Bert model using "{type}" architecture.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -312,12 +355,16 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     or classification task networks.
 
     Args:
-        weights: String, optional. Name of pretrained model to load weights.
-            Should be one of {names}.
-            If None, model is randomly initialized. Either `weights` or
-            `vocabulary_size` must be specified, but not both.
-        vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabularly_size` must be specified, but not both.
+        weights: String, optional. Either the name of pre-trained model to load
+            weights, a path to a weights file, or None.
+            For a pre-trained model, weights can be one of {names}.
+            If `None`, model is randomly initialized.
+        vocabulary: Either the name of a pre-trained model vocabulary, a list
+            of vocabulary terms, or filename.
+            For a pre-trained model, vocabulary can be one of {names}.
+            If `weights` is a pre-trained model name, this argument should
+            not be set. The `vocabulary` will be inferred to match the
+            pre-trained weights.
         name: String, optional. Name of the model.
         trainable: Boolean, optional. If the model's variables should be
             trainable.
@@ -325,12 +372,12 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
     Example usage:
     ```python
     # Randomly initialized BertBase encoder
-    model = keras_nlp.models.BertBase(vocabulary_size=10000)
+    model = keras_nlp.models.BertBase(vocabulary="vocab.txt")
 
     # Call encoder on the inputs.
     input_data = {{
         "input_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
+            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary
         ),
         "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
         "input_mask": tf.constant([1] * 512, shape=(1, 512)),
@@ -345,29 +392,32 @@ MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
 """
 
 
-def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
+def BertBase(weights=None, vocabulary=None, name=None, trainable=True):
+    if weights in checkpoints["bert_base"]:
+        if vocabulary is not None:
+            raise ValueError(
+                "When `weights` is set to a pretrained model name."
+                "Vocabulary should not be set. Received: "
+                f"weights={weights}, vocabulary={vocabulary}."
+            )
+        # Set the vocabulary name to match the weights.
+        vocabulary = weights
+        weights = keras.utils.get_file(
+            "model.h5",
+            BASE_PATH + "bert_base_" + weights + "/model.h5",
+            cache_subdir="models/bert_base/" + weights + "/",
+            file_hash=checkpoints["bert_base"][weights]["md5"],
         )
 
-    if weights:
-        if weights not in checkpoints["bert_base"]:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(checkpoints["bert_base"])}. """
-                f"Received: {weights}"
-            )
-        vocabulary_size = checkpoints["bert_base"][weights]["vocabulary_size"]
+    if vocabulary in checkpoints["bert_base"]:
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            BASE_PATH + "bert_base_" + vocabulary + "/vocab.txt",
+            cache_subdir="models/bert_base/" + vocabulary + "/",
+        )
 
     model = BertCustom(
-        vocabulary_size=vocabulary_size,
+        vocabulary=vocabulary,
         num_layers=12,
         num_heads=12,
         hidden_dim=768,
@@ -381,16 +431,9 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
     # TODO(jbischof): consider changing format from `h5` to
     # `tf.train.Checkpoint` once
     # https://github.com/keras-team/keras/issues/16946 is resolved
-    if weights:
-        filepath = keras.utils.get_file(
-            "model.h5",
-            BASE_PATH + "bert_base_" + weights + "/model.h5",
-            cache_subdir="models/bert_base/" + weights + "/",
-            file_hash=checkpoints["bert_base"][weights]["md5"],
-        )
-        model.load_weights(filepath)
+    if weights is not None:
+        model.load_weights(weights)
 
-    # TODO(jbischof): attach the tokenizer or create separate tokenizer class
     return model
 
 
