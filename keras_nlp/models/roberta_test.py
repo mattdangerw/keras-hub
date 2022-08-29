@@ -33,10 +33,10 @@ class RobertaTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
@@ -53,10 +53,10 @@ class RobertaTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
@@ -66,10 +66,10 @@ class RobertaTest(tf.test.TestCase):
     def test_valid_call_roberta_base(self):
         model = roberta.RobertaBase(vocabulary_size=10000, name="encoder")
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
             ),
-            "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
 
@@ -85,13 +85,11 @@ class RobertaTest(tf.test.TestCase):
         )
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones((8, seq_length), dtype="int32"),
-                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+                "token_ids": tf.ones((8, seq_length), dtype="int32"),
+                "padding_mask": tf.ones((8, seq_length), dtype="int32"),
             }
             output = model(input_data)
-            self.assertAllEqual(
-                tf.shape(output["sequence_output"]), [8, seq_length, 768]
-            )
+            self.assertAllEqual(tf.shape(output), [8, seq_length, 768])
 
     def test_saving_model(self):
         model = roberta.RobertaCustom(
@@ -104,10 +102,10 @@ class RobertaTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
@@ -118,7 +116,4 @@ class RobertaTest(tf.test.TestCase):
         restored_model = keras.models.load_model(save_path)
 
         restored_output = restored_model.predict(input_data)
-        self.assertAllClose(
-            model_output["sequence_output"],
-            restored_output["sequence_output"],
-        )
+        self.assertAllClose(model_output, restored_output)

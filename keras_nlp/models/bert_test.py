@@ -33,13 +33,13 @@ class BertTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
@@ -57,9 +57,9 @@ class BertTest(tf.test.TestCase):
         )
         for seq_length in (25, 50, 75):
             input_data = {
-                "input_ids": tf.ones((8, seq_length), dtype="int32"),
+                "token_ids": tf.ones((8, seq_length), dtype="int32"),
                 "segment_ids": tf.ones((8, seq_length), dtype="int32"),
-                "input_mask": tf.ones((8, seq_length), dtype="int32"),
+                "padding_mask": tf.ones((8, seq_length), dtype="int32"),
             }
             model(input_data)
 
@@ -74,13 +74,13 @@ class BertTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=30522
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
@@ -90,11 +90,11 @@ class BertTest(tf.test.TestCase):
     def test_valid_call_bert_base(self):
         model = bert.BertBase(vocabulary_size=10000, name="encoder")
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-            "input_mask": tf.constant([1] * 512, shape=(1, 512)),
+            "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
         }
         model(input_data)
 
@@ -129,13 +129,13 @@ class BertTest(tf.test.TestCase):
             name="encoder",
         )
         input_data = {
-            "input_ids": tf.random.uniform(
+            "token_ids": tf.random.uniform(
                 shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
             ),
             "segment_ids": tf.constant(
                 [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
-            "input_mask": tf.constant(
+            "padding_mask": tf.constant(
                 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
             ),
         }
