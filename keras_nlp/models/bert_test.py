@@ -22,6 +22,47 @@ from tensorflow import keras
 from keras_nlp.models import bert
 
 
+class BertTokenizerTest(tf.test.TestCase):
+    def setUp(self):
+        self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
+        self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
+        self.vocab += ["the", "quick", "brown", "fox"]
+
+    def test_tokenize(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        tokenizer = bert.BertTokenizer(
+            vocabulary=self.vocab,
+            sequence_length=8,
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(output["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
+
+    def test_lowercase(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        tokenizer = bert.BertTokenizer(
+            vocabulary=self.vocab,
+            sequence_length=8,
+            lowercase=True,
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
+
+    def test_no_packing(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        tokenizer = bert.BertTokenizer(
+            vocabulary=self.vocab,
+            sequence_length=8,
+            pack_inputs=False,
+        )
+        self.assertAllEqual(tokenizer(input_data), [[5, 6, 7, 8, 1]])
+
+    def test_detokenize(self):
+        input_data = [[5, 6, 7, 8]]
+        tokenizer = bert.BertTokenizer(vocabulary=self.vocab)
+        output = tokenizer.detokenize(input_data)
+        self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
+
+
 class BertTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.model = bert.BertCustom(

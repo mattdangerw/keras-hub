@@ -17,8 +17,10 @@
 import tensorflow as tf
 from tensorflow import keras
 
-from keras_nlp.layers import PositionEmbedding
-from keras_nlp.layers import TransformerEncoder
+from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
+from keras_nlp.layers.position_embedding import PositionEmbedding
+from keras_nlp.layers.transformer_encoder import TransformerEncoder
+from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 def _bert_kernel_initializer(stddev=0.02):
@@ -31,27 +33,40 @@ BASE_PATH = "https://storage.googleapis.com/keras-nlp/models/"
 checkpoints = {
     "bert_base": {
         "uncased_en": {
-            "md5": "9b2b2139f221988759ac9cdd17050b31",
-            "description": "Base size of Bert where all input is lowercased. "
-            "Trained on English Wikipedia + BooksCorpus.",
+            "description": (
+                "Base size of Bert where all input is lowercased. "
+                "Trained on English Wikipedia + BooksCorpus."
+            ),
+            "weights_hash": "9b2b2139f221988759ac9cdd17050b31",
+            "vocabulary_hash": "64800d5d8528ce344256daf115d4965e",
             "vocabulary_size": 30522,
+            "lowercase": True,
         },
         "cased_en": {
-            "md5": "f94a6cb012e18f4fb8ec92abb91864e9",
-            "description": "Base size of Bert where case is maintained. "
-            "Trained on English Wikipedia + BooksCorpus.",
+            "description": (
+                "Base size of Bert where case is maintained. "
+                "Trained on English Wikipedia + BooksCorpus."
+            ),
+            "weights_hash": "f94a6cb012e18f4fb8ec92abb91864e9",
+            "vocabulary_hash": "bb6ca9b42e790e5cd986bbb16444d0e0",
             "vocabulary_size": 28996,
+            "lowercase": True,
         },
         "zh": {
-            "md5": "79afa421e386076e62ab42dad555ab0c",
-            "description": "Base size of BERT. Trained on Chinese Wikipedia.",
+            "description": ("Base size of BERT. Trained on Chinese Wikipedia."),
+            "weights_hash": "79afa421e386076e62ab42dad555ab0c",
+            "vocabulary_hash": "3b5b76c4aef48ecf8cb3abaafe960f09",
             "vocabulary_size": 21128,
+            "lowercase": True,
         },
         "multi_cased": {
-            "md5": "b0631cec0a1f2513c6cfd75ba29c33aa",
-            "description": "Base size of BERT. Trained on Wikipedias of "
-            "104 languages.",
+            "description": (
+                "Base size of BERT. Trained on Wikipedias of 104 languages."
+            ),
+            "weights_hash": "b0631cec0a1f2513c6cfd75ba29c33aa",
+            "vocabulary_hash": "d9d865138d17f1958502ed060ecfeeb6",
             "vocabulary_size": 119547,
+            "lowercase": True,
         },
     }
 }
@@ -251,6 +266,151 @@ class BertCustom(keras.Model):
         return config
 
 
+TOKENIZER_DOCSTRING = """Bert tokenizer with pre-trained vocabularies.
+
+This layer will tokenize inputs as a specialized
+`keras_nlp.tokenizers.WordPieceTokenizer` which supports loading pre-trained
+vocabularies.
+
+If `pack_inputs` is True, this layer will accept a tuple of (possibly batched)
+inputs, tokenize each input, truncate them according to the `trucator` strategy,
+and pack with them appropriate `"[CLS]"` and `"[PAD]"` tokens. The output of the
+layer will be a dictionary with three keys `"token_ids"`, `"segment_ids"`, and
+`"padding_mask"`. The output can be used directly by a Bert model.
+
+If `pack_inputs` is False, this layer acts only as a raw tokenizer. Input should
+be a single (possibly batched) input, and output will be a `tf.RaggedTensor` of
+token ids. This is useful when inputs need to be packed in a custom fashion,
+but output will need to be further processed before being passed to a Bert
+model.
+
+Args:
+    vocabulary: One of a list of vocabulary terms, a vocabulary filename, or
+        the name of the pre-trained vocabulary. For a pre-trained vocabulary,
+        `vocabulary` should be one of {names}, and should match the `weights`
+        parameter of any pre-trained Bert model.
+    lowercase: If `True`, input will be lowercase before tokenization. If
+        `vocabulary` is set to a pre-trained vocabulary, this parameter will
+        be inferred.
+    pack_inputs: If `True`, the layer will accept multiple inputs, pack them
+        into a single sequence, and return a dictionary of
+    sequence_length: The length of the packed inputs. Only used if
+        `pack_inputs` is True.
+    truncator: The algorithm to truncate a list of batched segments to fit
+        within `sequence_length`. Only used if
+        `pack_inputs` is True. The value can be either `round_robin` or
+        `waterfall`:
+            - `"round_robin"`: Available space is assigned one token at a
+                time in a round-robin fashion to the inputs that still need
+                some, until the limit is reached.
+            - `"waterfall"`: The allocation of the budget is done using a
+                "waterfall" algorithm that allocates quota in a
+                left-to-right manner and fills up the buckets until we run
+                out of budget. It support arbitrary number of segments.
+
+Example usage:
+```python
+tokenizer = keras_nlp.models.BertTokenizer(vocabulary="uncased_en")
+
+# Tokenize a single input.
+tokenizer("The quick brown fox jumped.")
+
+# Tokenize multiple inputs.
+tokenizer(("The quick brown fox jumped.", "The lazy dog slept.")
+```
+"""
+
+
+class BertTokenizer(WordPieceTokenizer):
+    def __init__(
+        self,
+        vocabulary="uncased_en",
+        lowercase=False,
+        sequence_length=512,
+        pack_inputs=True,
+        truncator="round_robin",
+    ):
+        # This assumes two things. First, that the "base" models contain all
+        # relevant pre-trained vocabularies. Second, that the vocabulary matches
+        # for a given type of weights across the full set of Bert architectures
+        # (e.g. base and large).
+        if (
+            isinstance(vocabulary, str)
+            and vocabulary in checkpoints["bert_base"]
+        ):
+            metadata = checkpoints["bert_base"][vocabulary]
+            vocabulary = keras.utils.get_file(
+                "vocab.txt",
+                BASE_PATH + "bert_base_" + vocabulary + "/vocab.txt",
+                cache_subdir="models/bert_base/" + vocabulary + "/",
+                file_hash=metadata["vocabulary_hash"],
+            )
+            lowercase = metadata["lowercase"]
+
+        super().__init__(vocabulary=vocabulary, lowercase=lowercase)
+
+        # Convenience accessors for special tokens and ids.
+        self.unk_token = "[UNK]"
+        self.pad_token = "[PAD]"
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.mask_token = "[MASK]"
+        self.unk_token_id = self.token_to_id(self.unk_token)
+        self.pad_token_id = self.token_to_id(self.pad_token)
+        self.cls_token_id = self.token_to_id(self.cls_token)
+        self.sep_token_id = self.token_to_id(self.sep_token)
+        self.mask_token_id = self.token_to_id(self.mask_token)
+
+        self.pack_inputs = pack_inputs
+        if self.pack_inputs:
+            self.packer = MultiSegmentPacker(
+                start_value=self.cls_token_id,
+                end_value=self.sep_token_id,
+                pad_value=self.pad_token_id,
+                truncator=truncator,
+                sequence_length=sequence_length,
+            )
+        else:
+            self.packer = None
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "vocabulary": self.vocabulary,
+                "lowercase": self.lowercase,
+                "pack_inputs": self.pack_inputs,
+                "sequence_length": self.packer.sequence_length,
+                "trucator": self.packer.trucator,
+            }
+        )
+        return config
+
+    def tokenize(self, inputs):
+        if not self.pack_inputs:
+            return super().tokenize(inputs)
+
+        if not isinstance(inputs, (list, tuple)):
+            inputs = [inputs]
+
+        unpacked = []
+        for x in inputs:
+            unpacked.append(super().tokenize(x))
+        token_ids, segment_ids = self.packer(unpacked)
+        return {
+            "token_ids": token_ids,
+            "segment_ids": segment_ids,
+            "input_mask": token_ids != 0,
+        }
+
+
+setattr(
+    BertTokenizer,
+    "__doc__",
+    TOKENIZER_DOCSTRING.format(names=", ".join(checkpoints["bert_base"])),
+)
+
+
 class BertClassifier(keras.Model):
     """Bert encoder model with a classification head.
 
@@ -397,7 +557,7 @@ def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
             "model.h5",
             BASE_PATH + "bert_base_" + weights + "/model.h5",
             cache_subdir="models/bert_base/" + weights + "/",
-            file_hash=checkpoints["bert_base"][weights]["md5"],
+            file_hash=checkpoints["bert_base"][weights]["weights_hash"],
         )
         model.load_weights(filepath)
 
