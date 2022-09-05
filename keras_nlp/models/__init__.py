@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras_nlp.models.bert import BertBase
+from keras_nlp.models.bert import BertClassificationHead
 from keras_nlp.models.bert import BertClassifier
 from keras_nlp.models.bert import BertCustom
 from keras_nlp.models.bert import BertTokenizer

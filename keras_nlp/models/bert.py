@@ -21,6 +21,7 @@ from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
+from keras_nlp.utils.pipeline_model import PipelineModel
 
 
 def _bert_kernel_initializer(stddev=0.02):
@@ -418,66 +419,121 @@ setattr(
 )
 
 
-class BertClassifier(keras.Model):
-    """Bert encoder model with a classification head.
+class BertClassifier(PipelineModel):
+    """Bert classification pipeline."""
+
+    def __init__(
+        self,
+        backbone="base",
+        backbone_weights="uncased_en",
+        vocabulary=None,
+        lowercase=None,
+        sequence_length=512,
+        num_classes=2,
+        **kwargs,
+    ):
+        if isinstance(backbone_weights, str) and vocabulary is None:
+            vocabulary = backbone_weights
+        tokenizer = BertTokenizer(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            sequence_length=sequence_length,
+        )
+
+        if isinstance(backbone, str):
+            if backbone == "base":
+                backbone = BertBase(weights=backbone_weights)
+            else:
+                raise ValueError("backbone should be 'base' or a model.")
+        elif isinstance(backbone, keras.Model):
+            if backbone_weights is not None:
+                raise ValueError("If backbone is a model, no backbone_weights")
+        else:
+            raise ValueError("backbone should be 'base' or a model.")
+
+        head = BertClassificationHead(
+            num_classes=num_classes,
+            activation="softmax",
+        )
+
+        super().__init__(
+            inputs=backbone.input,
+            outputs=head(backbone(backbone.input)),
+        )
+
+        self.backbone = backbone
+        self.tokenizer = tokenizer
+        self.head = BertClassificationHead(num_classes)
+
+    def compile(
+        self,
+        optimizer=keras.optimizers.Adam(learning_rate=2e-5),
+        loss="sparse_categorical_crossentropy",
+        metrics=["sparse_categorical_accuracy"],
+        jit_compile=True,
+        **kwargs,
+    ):
+        super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            jit_compile=jit_compile,
+            **kwargs,
+        )
+
+    def preprocess_features(self, x):
+        if isinstance(x, dict):
+            return x
+        if isinstance(x, str):
+            x = tf.convert_to_tensor([x])
+        return self.tokenizer(x)
+
+
+class BertClassificationHead(keras.layers.Layer):
+    """Bert classification head.
+
+    This layer should be called directly on the outputs of a
+    Bert model, an will produce a output with shape `(batch_size, num_classes)`.
+
 
     Args:
-        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
         num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
-            trainable.
-
-    Example usage:
-    ```python
-    # Randomly initialized Bert encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
-    classifier = bert.BertClassifier(model, 4, name="classifier")
-    logits = classifier(input_data)
-    ```
+        activation: The activation of the dense output layer. Usually this
+            should be set to either `None` for class logits, or "softmax" for
+            class probabilities.
+        name: String, optional. Name of the layer.
     """
 
     def __init__(
         self,
-        base_model,
         num_classes,
-        name=None,
-        trainable=True,
+        activation="softmax",
+        **kwargs,
     ):
-        inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
-        outputs = keras.layers.Dense(
+        super().__init__(**kwargs)
+
+        self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
+
+        self.dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=_bert_kernel_initializer(),
+            activation=self.activation,
             name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
         )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
+
+    def call(self, inputs):
+        return self.dense(inputs["pooled_output"])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
+            }
+        )
+        return config
 
 
 MODEL_DOCSTRING = """Bert "{type}" architecture.
