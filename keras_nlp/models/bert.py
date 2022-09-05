@@ -329,6 +329,7 @@ class BertTokenizer(WordPieceTokenizer):
         sequence_length=512,
         pack_inputs=True,
         truncator="round_robin",
+        **kwargs,
     ):
         # This assumes two things. First, that the "base" models contain all
         # relevant pre-trained vocabularies. Second, that the vocabulary matches
@@ -347,7 +348,7 @@ class BertTokenizer(WordPieceTokenizer):
             )
             lowercase = metadata["lowercase"]
 
-        super().__init__(vocabulary=vocabulary, lowercase=lowercase)
+        super().__init__(vocabulary=vocabulary, lowercase=lowercase, **kwargs)
 
         # Convenience accessors for special tokens and ids.
         self.unk_token = "[UNK]"
@@ -411,70 +412,54 @@ setattr(
 )
 
 
-class BertClassifier(keras.Model):
-    """Bert encoder model with a classification head.
+class BertClassificationHead(keras.layers.Layer):
+    """Bert classification head.
+
+    This layer should be called directly on the outputs of a
+    Bert model, an will produce a output with shape `(batch_size, num_classes)`.
+
 
     Args:
-        base_model: A `keras_nlp.models.BertCustom` to encode inputs.
         num_classes: Int. Number of classes to predict.
-        name: String, optional. Name of the model.
-        trainable: Boolean, optional. If the model's variables should be
-            trainable.
-
-    Example usage:
-    ```python
-    # Randomly initialized Bert encoder
-    model = keras_nlp.models.BertCustom(
-        vocabulary_size=30522,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        max_sequence_length=12
-    )
-
-    # Call classifier on the inputs.
-    input_data = {
-        "token_ids": tf.random.uniform(
-            shape=(1, 12), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant(
-            [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-        "padding_mask": tf.constant(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], shape=(1, 12)
-        ),
-    }
-    classifier = bert.BertClassifier(model, 4, name="classifier")
-    logits = classifier(input_data)
-    ```
+        activation: The activation of the dense output layer. Usually this
+            should be set to either `None` for class logits, or "softmax" for
+            class probabilities.
+        name: String, optional. Name of the layer.
     """
 
     def __init__(
         self,
-        base_model,
         num_classes,
-        name=None,
-        trainable=True,
+        activation="softmax",
+        **kwargs,
     ):
-        inputs = base_model.input
-        pooled = base_model(inputs)["pooled_output"]
-        outputs = keras.layers.Dense(
+        super().__init__(**kwargs)
+
+        self.num_classes = num_classes
+        self.activation = keras.activations.get(activation)
+
+        self.dense = keras.layers.Dense(
             num_classes,
             kernel_initializer=_bert_kernel_initializer(),
+            activation=self.activation,
             name="logits",
-        )(pooled)
-        # Instantiate using Functional API Model constructor
-        super().__init__(
-            inputs=inputs, outputs=outputs, name=name, trainable=trainable
         )
-        # All references to `self` below this line
-        self.base_model = base_model
-        self.num_classes = num_classes
+
+    def call(self, inputs):
+        return self.dense(inputs["pooled_output"])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_classes": self.num_classes,
+                "activation": keras.activations.serialize(self.activation),
+            }
+        )
+        return config
 
 
-MODEL_DOCSTRING = """Bi-directional Transformer-based encoder network (Bert)
-    using "{type}" architecture.
+MODEL_DOCSTRING = """Bert "{type}" model.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for

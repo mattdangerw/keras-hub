@@ -110,8 +110,11 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
             self.model(input_data)
 
     def test_valid_call_classifier(self):
-        classifier = bert.BertClassifier(self.model, 4, name="classifier")
-        classifier(self.input_batch)
+        inputs = self.model.input
+        head = bert.BertClassificationHead(4, name="classifier")
+        outputs = head(self.model(inputs))
+        model = keras.Model(inputs, outputs)
+        model(self.input_batch)
 
     def test_valid_call_bert_base(self):
         model = bert.BertBase(vocabulary_size=1000, name="encoder")
@@ -148,7 +151,10 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_compile(self, jit_compile):
-        model = bert.BertClassifier(self.model, 4, name="classifier")
+        inputs = self.model.input
+        head = bert.BertClassificationHead(4, name="classifier")
+        outputs = head(self.model(inputs))
+        model = keras.Model(inputs, outputs)
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_batch)
 
@@ -156,7 +162,10 @@ class BertTest(tf.test.TestCase, parameterized.TestCase):
         ("jit_compile_false", False), ("jit_compile_true", True)
     )
     def test_bert_classifier_compile_batched_ds(self, jit_compile):
-        model = bert.BertClassifier(self.model, 4, name="classifier")
+        inputs = self.model.input
+        head = bert.BertClassificationHead(4, name="classifier")
+        outputs = head(self.model(inputs))
+        model = keras.Model(inputs, outputs)
         model.compile(jit_compile=jit_compile)
         model.predict(self.input_dataset)
 
