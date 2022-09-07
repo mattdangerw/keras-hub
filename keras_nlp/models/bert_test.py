@@ -36,6 +36,26 @@ class BertTokenizerTest(tf.test.TestCase):
         )
         output = tokenizer(input_data)
         self.assertAllEqual(output["token_ids"], [2, 5, 6, 7, 8, 1, 3, 0])
+        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
+
+    def test_tokenize_strings(self):
+        input_data = ["THE QUICK BROWN FOX."]
+        tokenizer = bert.BertTokenizer(
+            vocabulary=self.vocab,
+            sequence_length=8,
+            dtype="string",
+        )
+        output = tokenizer(input_data)
+        self.assertAllEqual(
+            output["token_ids"],
+            tf.constant(
+                ["[CLS]", "THE", "QUICK", "BROWN"]
+                + ["FOX", "[UNK]", "[SEP]", "[PAD]"]
+            ),
+        )
+        self.assertAllEqual(output["segment_ids"], [0, 0, 0, 0, 0, 0, 0, 0])
+        self.assertAllEqual(output["padding_mask"], [1, 1, 1, 1, 1, 1, 1, 0])
 
     def test_lowercase(self):
         input_data = ["THE QUICK BROWN FOX."]
@@ -48,13 +68,26 @@ class BertTokenizerTest(tf.test.TestCase):
         self.assertAllEqual(output["token_ids"], [2, 9, 10, 11, 12, 1, 3, 0])
 
     def test_no_packing(self):
-        input_data = ["THE QUICK BROWN FOX."]
+        input_data = "THE QUICK BROWN FOX."
         tokenizer = bert.BertTokenizer(
             vocabulary=self.vocab,
             sequence_length=8,
             pack_inputs=False,
         )
-        self.assertAllEqual(tokenizer(input_data), [[5, 6, 7, 8, 1]])
+        self.assertAllEqual(tokenizer(input_data), [5, 6, 7, 8, 1])
+
+    def test_no_packing_strings(self):
+        input_data = "THE QUICK BROWN FOX."
+        tokenizer = bert.BertTokenizer(
+            vocabulary=self.vocab,
+            sequence_length=8,
+            pack_inputs=False,
+            dtype="string",
+        )
+        self.assertAllEqual(
+            tokenizer(input_data),
+            tf.constant(["THE", "QUICK", "BROWN", "FOX", "[UNK]"]),
+        )
 
     def test_detokenize(self):
         input_data = [[5, 6, 7, 8]]

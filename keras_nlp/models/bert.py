@@ -364,10 +364,11 @@ class BertTokenizer(WordPieceTokenizer):
 
         self.pack_inputs = pack_inputs
         if self.pack_inputs:
+            is_string = tf.dtypes.as_dtype(self.compute_dtype) == tf.string
             self.packer = MultiSegmentPacker(
-                start_value=self.cls_token_id,
-                end_value=self.sep_token_id,
-                pad_value=self.pad_token_id,
+                start_value=self.cls_token if is_string else self.cls_token_id,
+                end_value=self.sep_token if is_string else self.sep_token_id,
+                pad_value=self.pad_token if is_string else self.pad_token_id,
                 truncator=truncator,
                 sequence_length=sequence_length,
             )
@@ -398,10 +399,15 @@ class BertTokenizer(WordPieceTokenizer):
         for x in inputs:
             unpacked.append(super().tokenize(x))
         token_ids, segment_ids = self.packer(unpacked)
+
+        # Compute the padding mask.
+        is_string = tf.dtypes.as_dtype(self.compute_dtype) == tf.string
+        mask = token_ids != (self.pad_token if is_string else self.pad_token_id)
+
         return {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
-            "input_mask": token_ids != 0,
+            "padding_mask": mask,
         }
 
 
