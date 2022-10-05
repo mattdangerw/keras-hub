@@ -13,19 +13,22 @@
 # limitations under the License.
 """BERT task specific models and heads."""
 
+import os
+
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_checkpoints import checkpoints
+from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-from keras_nlp.models.bert.bert_models import model_class_by_name
+from keras_nlp.models.bert.bert_presets import classifier_configs
+from keras_nlp.models.bert.bert_presets import classifier_weight_hashes
+from keras_nlp.models.bert.bert_presets import classifier_weight_urls
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
     Args:
         backbone: A string, `keras_nlp.models.BertCustom` or derivative such as
-            `keras_nlp.models.BertBase` to encode inputs. If a string, should be
-            one of {names}.
+            `keras_nlp.models.BertBase` to encode inputs.
         num_classes: int. Number of classes to predict.
         name: string, optional. Name of the model.
         trainable: boolean, optional. If the model's variables should be
@@ -67,6 +70,7 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 """
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertClassifier(keras.Model):
     def __init__(
         self,
@@ -76,18 +80,8 @@ class BertClassifier(keras.Model):
         trainable=True,
     ):
         # Load backbone from string identifier
-        # TODO(jbischof): create util function when ready to load backbones in
-        # other task classes (e.g., load_backbone_from_string())
         if isinstance(backbone, str):
-            if backbone not in checkpoints:
-                raise ValueError(
-                    "`backbone` must be one of "
-                    f"""{", ".join(checkpoints.keys())}. """
-                    f"Received: {backbone}"
-                )
-            backbone_class_str = checkpoints[backbone]["model"]
-            backbone_class = model_class_by_name(backbone_class_str)
-            backbone = backbone_class(backbone)
+            backbone = Bert.from_preset(backbone)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
@@ -104,9 +98,35 @@ class BertClassifier(keras.Model):
         self.backbone = backbone
         self.num_classes = num_classes
 
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+        }
 
-setattr(
-    BertClassifier,
-    "__doc__",
-    CLASSIFIER_DOCSTRING.format(names=", ".join(checkpoints.keys())),
-)
+    @classmethod
+    def from_config(cls, config):
+        if isinstance(config, str):
+            config = classifier_configs[config]
+        if isinstance(config["backbone"], dict):
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
+
+    @classmethod
+    def from_preset(cls, id):
+        model = cls.from_config(id)
+        model.load_weights(id)
+        return model
+
+    def load_weights(self, weights):
+        if isinstance(weights, str):
+            weights = keras.utils.get_file(
+                "model.h5",
+                classifier_weight_urls[weights],
+                cache_subdir=os.path.join("models", weights),
+                file_hash=classifier_weight_hashes[weights],
+            )
+        super().load_weights(weights)
+
+
+setattr(BertClassifier, "__doc__", CLASSIFIER_DOCSTRING)

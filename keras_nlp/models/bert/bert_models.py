@@ -21,58 +21,18 @@ from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.bert.bert_checkpoints import checkpoints
-from keras_nlp.models.bert.bert_checkpoints import compatible_checkpoints
-from keras_nlp.models.bert.bert_checkpoints import vocabularies
+from keras_nlp.models.bert.bert_presets import backbone_configs
+from keras_nlp.models.bert.bert_presets import backbone_weight_hashes
+from keras_nlp.models.bert.bert_presets import backbone_weight_urls
 
 
 def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
 
 
-def _handle_pretrained_model_arguments(bert_variant, weights, vocabulary_size):
-    """Look up pretrained defaults for model arguments.
-
-    This helper will validate the `weights` and `vocabulary_size` arguments, and
-    fully resolve them in the case we are loading pretrained weights.
-    """
-    if (vocabulary_size is None and weights is None) or (
-        vocabulary_size and weights
-    ):
-        raise ValueError(
-            "One of `vocabulary_size` or `weights` must be specified "
-            "(but not both). "
-            f"Received: weights={weights}, "
-            f"vocabulary_size={vocabulary_size}"
-        )
-
-    if weights:
-        arch_checkpoints = compatible_checkpoints(bert_variant)
-        if weights not in arch_checkpoints:
-            raise ValueError(
-                "`weights` must be one of "
-                f"""{", ".join(arch_checkpoints)}. """
-                f"Received: {weights}"
-            )
-        metadata = checkpoints[weights]
-        vocabulary = metadata["vocabulary"]
-        vocabulary_size = vocabularies[vocabulary]["vocabulary_size"]
-
-        # TODO(jbischof): consider changing format from `h5` to
-        # `tf.train.Checkpoint` once
-        # https://github.com/keras-team/keras/issues/16946 is resolved.
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", weights),
-            file_hash=metadata["weights_hash"],
-        )
-
-    return weights, vocabulary_size
-
-
-class BertCustom(keras.Model):
-    """BERT encoder network with custom hyperparmeters.
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class Bert(keras.Model):
+    """BERT encoder network.
 
     This network implements a bi-directional Transformer-based encoder as
     described in ["BERT: Pre-training of Deep Bidirectional Transformers for
@@ -248,226 +208,37 @@ class BertCustom(keras.Model):
         self.cls_token_index = cls_token_index
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "vocabulary_size": self.vocabulary_size,
-                "hidden_dim": self.hidden_dim,
-                "intermediate_dim": self.intermediate_dim,
-                "num_layers": self.num_layers,
-                "num_heads": self.num_heads,
-                "max_sequence_length": self.max_sequence_length,
-                "num_segments": self.num_segments,
-                "dropout": self.dropout,
-                "cls_token_index": self.cls_token_index,
-            }
-        )
-        return config
+        # TODO(mattdangerw): handle base layer config params.
+        return {
+            "vocabulary_size": self.vocabulary_size,
+            "hidden_dim": self.hidden_dim,
+            "intermediate_dim": self.intermediate_dim,
+            "num_layers": self.num_layers,
+            "num_heads": self.num_heads,
+            "max_sequence_length": self.max_sequence_length,
+            "num_segments": self.num_segments,
+            "dropout": self.dropout,
+            "cls_token_index": self.cls_token_index,
+        }
 
+    @classmethod
+    def from_config(cls, config):
+        if isinstance(config, str):
+            config = backbone_configs[config]
+        return cls(**config)
 
-MODEL_DOCSTRING = """Bert "{type}" architecture.
+    @classmethod
+    def from_preset(cls, id):
+        model = cls.from_config(id)
+        model.load_weights(id)
+        return model
 
-    This network implements a bi-directional Transformer-based encoder as
-    described in ["BERT: Pre-training of Deep Bidirectional Transformers for
-    Language Understanding"](https://arxiv.org/abs/1810.04805). It includes the
-    embedding lookups and transformer layers, but not the masked language model
-    or classification task networks.
-
-    Args:
-        weights: string, optional. Name of pretrained model to load weights.
-            Should be one of {names}.
-            If None, model is randomly initialized. Either `weights` or
-            `vocabulary_size` must be specified, but not both.
-        vocabulary_size: Int, optional. The size of the token vocabulary. Either
-            `weights` or `vocabulary_size` must be specified, but not both.
-        name: string, optional. Name of the model.
-        trainable: boolean, optional. If the model's variables should be
-            trainable.
-
-    Examples:
-    ```python
-    # Randomly initialized Bert{type} encoder
-    model = keras_nlp.models.Bert{type}(vocabulary_size=10000)
-
-    # Call encoder on the inputs.
-    input_data = {{
-        "token_ids": tf.random.uniform(
-            shape=(1, 512), dtype=tf.int64, maxval=model.vocabulary_size
-        ),
-        "segment_ids": tf.constant([0] * 200 + [1] * 312, shape=(1, 512)),
-        "padding_mask": tf.constant([1] * 512, shape=(1, 512)),
-    }}
-    output = model(input_data)
-
-    # Load a pretrained model
-    model = keras_nlp.models.Bert{type}(weights="bert_base_uncased_en")
-    # Call encoder on the inputs.
-    output = model(input_data)
-    ```
-"""
-
-
-def BertTiny(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "BertTiny", weights, vocabulary_size
-    )
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=2,
-        num_heads=2,
-        hidden_dim=128,
-        intermediate_dim=512,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights:
-        model.load_weights(weights)
-
-    return model
-
-
-def BertSmall(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "BertSmall", weights, vocabulary_size
-    )
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=4,
-        num_heads=8,
-        hidden_dim=512,
-        intermediate_dim=2048,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights:
-        model.load_weights(weights)
-
-    return model
-
-
-def BertMedium(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "BertMedium", weights, vocabulary_size
-    )
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=8,
-        num_heads=8,
-        hidden_dim=512,
-        intermediate_dim=2048,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights:
-        model.load_weights(weights)
-
-    return model
-
-
-def BertBase(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "BertBase", weights, vocabulary_size
-    )
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=12,
-        num_heads=12,
-        hidden_dim=768,
-        intermediate_dim=3072,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights is not None:
-        model.load_weights(weights)
-
-    return model
-
-
-def BertLarge(weights=None, vocabulary_size=None, name=None, trainable=True):
-    weights, vocabulary_size = _handle_pretrained_model_arguments(
-        "BertLarge", weights, vocabulary_size
-    )
-
-    model = BertCustom(
-        vocabulary_size=vocabulary_size,
-        num_layers=24,
-        num_heads=16,
-        hidden_dim=1024,
-        intermediate_dim=4096,
-        dropout=0.1,
-        max_sequence_length=512,
-        name=name,
-        trainable=trainable,
-    )
-
-    if weights is not None:
-        model.load_weights(weights)
-
-    return model
-
-
-def model_class_by_name(classname):
-    """Return model class given the class name."""
-    return {
-        "BertTiny": BertTiny,
-        "BertSmall": BertSmall,
-        "BertMedium": BertMedium,
-        "BertBase": BertBase,
-        "BertLarge": BertLarge,
-    }[classname]
-
-
-setattr(
-    BertTiny,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Tiny", names=", ".join(compatible_checkpoints("BertTiny"))
-    ),
-)
-
-setattr(
-    BertSmall,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Small", names=", ".join(compatible_checkpoints("BertSmall"))
-    ),
-)
-
-setattr(
-    BertMedium,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Medium", names=", ".join(compatible_checkpoints("BertMedium"))
-    ),
-)
-
-setattr(
-    BertBase,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Base", names=", ".join(compatible_checkpoints("BertBase"))
-    ),
-)
-setattr(
-    BertLarge,
-    "__doc__",
-    MODEL_DOCSTRING.format(
-        type="Large", names=", ".join(compatible_checkpoints("BertLarge"))
-    ),
-)
+    def load_weights(self, weights):
+        if isinstance(weights, str):
+            weights = keras.utils.get_file(
+                "model.h5",
+                backbone_weight_urls[weights],
+                cache_subdir=os.path.join("models", weights),
+                file_hash=backbone_weight_hashes[weights],
+            )
+        super().load_weights(weights)

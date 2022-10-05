@@ -18,30 +18,10 @@ import os
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.bert.bert_checkpoints import vocabularies
+from keras_nlp.models.bert.bert_presets import preprocessing_configs
+from keras_nlp.models.bert.bert_presets import vocabulary_hashes
+from keras_nlp.models.bert.bert_presets import vocabulary_urls
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
-
-
-def _handle_pretrained_tokenizer_arguments(vocabulary, lowercase):
-    """Look up pretrained defaults for tokenizer arguments.
-
-    This helper will validate the `vocabulary` and `lowercase` arguments, and
-    fully resolve them in the case we are loading pretrained weights.
-    """
-
-    # TODO(jbischof): allow user to lookup vocabulary from checkpoint name
-    if isinstance(vocabulary, str) and vocabulary in vocabularies:
-        metadata = vocabularies[vocabulary]
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", "bert", vocabulary),
-            file_hash=metadata["vocabulary_hash"],
-        )
-        lowercase = metadata["lowercase"]
-
-    return vocabulary, lowercase
-
 
 PREPROCESSOR_DOCSTRING = """BERT preprocessor with pretrained vocabularies.
 
@@ -63,9 +43,7 @@ layer, and can be used directly for custom packing on inputs.
 
 Args:
     vocabulary: One of a list of vocabulary terms, a vocabulary filename, or
-        the name of the pretrained vocabulary. For a pretrained vocabulary,
-        `vocabulary` should be one of {names}, and should match the `weights`
-        parameter of any pretrained BERT model.
+        the id of a preset model.
     lowercase: If `True`, input will be lowercase before tokenization. If
         `vocabulary` is set to a pretrained vocabulary, this parameter will
         be inferred.
@@ -115,10 +93,11 @@ ds = ds.map(
 """
 
 
+@keras.utils.register_keras_serializable(package="keras_nlp")
 class BertPreprocessor(keras.layers.Layer):
     def __init__(
         self,
-        vocabulary="uncased_en",
+        vocabulary=None,
         lowercase=False,
         sequence_length=512,
         truncate="round_robin",
@@ -126,9 +105,13 @@ class BertPreprocessor(keras.layers.Layer):
     ):
         super().__init__(**kwargs)
 
-        vocabulary, lowercase = _handle_pretrained_tokenizer_arguments(
-            vocabulary, lowercase
-        )
+        if isinstance(vocabulary, str):
+            vocabulary = keras.utils.get_file(
+                "model.h5",
+                vocabulary_urls[vocabulary],
+                cache_subdir=os.path.join("models", vocabulary),
+                file_hash=vocabulary_hashes[vocabulary],
+            )
 
         self.tokenizer = WordPieceTokenizer(
             vocabulary=vocabulary,
@@ -172,6 +155,16 @@ class BertPreprocessor(keras.layers.Layer):
         )
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        if isinstance(config, str):
+            config = preprocessing_configs[config]
+        return cls(**config)
+
+    @classmethod
+    def from_preset(cls, id):
+        return cls.from_config(id)
+
     def call(self, inputs):
         if not isinstance(inputs, (list, tuple)):
             inputs = [inputs]
@@ -185,8 +178,4 @@ class BertPreprocessor(keras.layers.Layer):
         }
 
 
-setattr(
-    BertPreprocessor,
-    "__doc__",
-    PREPROCESSOR_DOCSTRING.format(names=", ".join(vocabularies)),
-)
+setattr(BertPreprocessor, "__doc__", PREPROCESSOR_DOCSTRING)
