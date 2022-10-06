@@ -241,7 +241,7 @@ class Bert(keras.Model):
             weights = backbone_weight_url_to_id[weights]
         if weights in backbone_weight_id_to_url:
             weights = keras.utils.get_file(
-                "vocab.txt",
+                "model.h5",
                 backbone_weight_id_to_url[weights],
                 cache_subdir=os.path.join("models", weights),
             )
