@@ -20,8 +20,8 @@ from tensorflow import keras
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
 from keras_nlp.models.bert.bert_presets import classifier_configs
-from keras_nlp.models.bert.bert_presets import classifier_weight_hashes
-from keras_nlp.models.bert.bert_presets import classifier_weight_urls
+from keras_nlp.models.bert.bert_presets import classifier_weight_id_to_url
+from keras_nlp.models.bert.bert_presets import classifier_weight_url_to_id
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
@@ -78,10 +78,11 @@ class BertClassifier(keras.Model):
         num_classes=2,
         name=None,
         trainable=True,
+        weights=None,
     ):
-        # Load backbone from string identifier
+        # Load backbone from string identifier.
         if isinstance(backbone, str):
-            backbone = Bert.from_preset(backbone)
+            backbone = Bert.from_config(backbone)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
@@ -98,33 +99,36 @@ class BertClassifier(keras.Model):
         self.backbone = backbone
         self.num_classes = num_classes
 
+        if weights:
+            self.load_weights(weights)
+
     def get_config(self):
         return {
             "backbone": keras.layers.serialize(self.backbone),
             "num_classes": self.num_classes,
         }
 
+    preset_configs = classifier_configs
+    preset_weights = classifier_weight_id_to_url
+
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, load_weights=True):
         if isinstance(config, str):
             config = classifier_configs[config]
         if isinstance(config["backbone"], dict):
             config["backbone"] = keras.layers.deserialize(config["backbone"])
+        if load_weights is False:
+            config.pop("weights", None)
         return cls(**config)
 
-    @classmethod
-    def from_preset(cls, id):
-        model = cls.from_config(id)
-        model.load_weights(id)
-        return model
-
     def load_weights(self, weights):
-        if isinstance(weights, str):
+        if weights in classifier_weight_url_to_id:
+            weights = classifier_weight_url_to_id[weights]
+        if weights in classifier_weight_id_to_url:
             weights = keras.utils.get_file(
-                "model.h5",
-                classifier_weight_urls[weights],
+                "vocab.txt",
+                classifier_weight_id_to_url[weights],
                 cache_subdir=os.path.join("models", weights),
-                file_hash=classifier_weight_hashes[weights],
             )
         super().load_weights(weights)
 

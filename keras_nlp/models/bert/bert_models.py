@@ -22,8 +22,8 @@ from tensorflow import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.bert.bert_presets import backbone_configs
-from keras_nlp.models.bert.bert_presets import backbone_weight_hashes
-from keras_nlp.models.bert.bert_presets import backbone_weight_urls
+from keras_nlp.models.bert.bert_presets import backbone_weight_id_to_url
+from keras_nlp.models.bert.bert_presets import backbone_weight_url_to_id
 
 
 def bert_kernel_initializer(stddev=0.02):
@@ -107,6 +107,7 @@ class Bert(keras.Model):
         num_segments=2,
         name=None,
         trainable=True,
+        weights=None,
     ):
 
         # Index of classification token in the vocabulary
@@ -207,6 +208,9 @@ class Bert(keras.Model):
         self.dropout = dropout
         self.cls_token_index = cls_token_index
 
+        if weights:
+            self.load_weights(weights)
+
     def get_config(self):
         # TODO(mattdangerw): handle base layer config params.
         return {
@@ -221,24 +225,24 @@ class Bert(keras.Model):
             "cls_token_index": self.cls_token_index,
         }
 
+    preset_configs = backbone_configs
+    preset_weights = backbone_weight_id_to_url
+
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, load_weights=True):
         if isinstance(config, str):
             config = backbone_configs[config]
+        if load_weights is False:
+            config.pop("weights", None)
         return cls(**config)
 
-    @classmethod
-    def from_preset(cls, id):
-        model = cls.from_config(id)
-        model.load_weights(id)
-        return model
-
     def load_weights(self, weights):
-        if isinstance(weights, str):
+        if weights in backbone_weight_url_to_id:
+            weights = backbone_weight_url_to_id[weights]
+        if weights in backbone_weight_id_to_url:
             weights = keras.utils.get_file(
-                "model.h5",
-                backbone_weight_urls[weights],
+                "vocab.txt",
+                backbone_weight_id_to_url[weights],
                 cache_subdir=os.path.join("models", weights),
-                file_hash=backbone_weight_hashes[weights],
             )
         super().load_weights(weights)
