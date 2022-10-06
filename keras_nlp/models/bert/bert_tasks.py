@@ -17,11 +17,11 @@ import os
 
 from tensorflow import keras
 
+from keras_nlp.models.bert.bert_configs import classifier_configs
+from keras_nlp.models.bert.bert_configs import classifier_weight_id_to_url
+from keras_nlp.models.bert.bert_configs import classifier_weight_url_to_id
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
-from keras_nlp.models.bert.bert_presets import classifier_configs
-from keras_nlp.models.bert.bert_presets import classifier_weight_id_to_url
-from keras_nlp.models.bert.bert_presets import classifier_weight_url_to_id
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
@@ -126,7 +126,7 @@ class BertClassifier(keras.Model):
             weights = classifier_weight_url_to_id[weights]
         if weights in classifier_weight_id_to_url:
             weights = keras.utils.get_file(
-                "vocab.txt",
+                "model.h5",
                 classifier_weight_id_to_url[weights],
                 cache_subdir=os.path.join("models", weights),
             )

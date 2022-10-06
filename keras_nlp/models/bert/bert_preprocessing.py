@@ -18,9 +18,9 @@ import os
 from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
-from keras_nlp.models.bert.bert_presets import preprocessing_configs
-from keras_nlp.models.bert.bert_presets import vocab_id_to_url
-from keras_nlp.models.bert.bert_presets import vocab_url_to_id
+from keras_nlp.models.bert.bert_configs import preprocessing_configs
+from keras_nlp.models.bert.bert_configs import vocab_id_to_url
+from keras_nlp.models.bert.bert_configs import vocab_url_to_id
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 PREPROCESSOR_DOCSTRING = """BERT preprocessor with pretrained vocabularies.

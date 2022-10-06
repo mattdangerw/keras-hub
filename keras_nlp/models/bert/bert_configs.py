@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-backbone_presets = {
+backbones = {
     "bert_tiny_uncased_en": {
         "description": (
             "Tiny size of BERT where all input is lowercased. "
@@ -190,7 +190,7 @@ backbone_presets = {
     },
 }
 
-classifier_presets = {
+classifiers = {
     "bert_base_uncased_en_sst2": {
         "description": (
             "Base size of BERT where all input is lowercased. "
@@ -219,7 +219,7 @@ classifier_presets = {
     },
 }
 
-all_presets = {**backbone_presets, **classifier_presets}
+all_models = {**backbones, **classifiers}
 
 
 def pluck(dict, inner_key):
@@ -230,14 +230,15 @@ def invert(dict):
     return {v: k for k, v in dict.items()}
 
 
-preprocessing_configs = pluck(all_presets, "preprocessing_config")
+# Slices of our full configs for use in our actually library symbols.
+preprocessing_configs = pluck(all_models, "preprocessing_config")
 vocab_id_to_url = pluck(preprocessing_configs, "vocabulary")
 vocab_url_to_id = invert(vocab_id_to_url)
 
-backbone_configs = pluck(backbone_presets, "backbone_config")
+backbone_configs = pluck(backbones, "backbone_config")
 backbone_weight_id_to_url = pluck(backbone_configs, "weights")
 backbone_weight_url_to_id = invert(backbone_weight_id_to_url)
 
-classifier_configs = pluck(classifier_presets, "classifier_config")
+classifier_configs = pluck(classifiers, "classifier_config")
 classifier_weight_id_to_url = pluck(classifier_configs, "weights")
 classifier_weight_url_to_id = invert(classifier_weight_id_to_url)

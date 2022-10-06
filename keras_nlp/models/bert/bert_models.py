@@ -21,9 +21,9 @@ from tensorflow import keras
 
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
-from keras_nlp.models.bert.bert_presets import backbone_configs
-from keras_nlp.models.bert.bert_presets import backbone_weight_id_to_url
-from keras_nlp.models.bert.bert_presets import backbone_weight_url_to_id
+from keras_nlp.models.bert.bert_configs import backbone_configs
+from keras_nlp.models.bert.bert_configs import backbone_weight_id_to_url
+from keras_nlp.models.bert.bert_configs import backbone_weight_url_to_id
 
 
 def bert_kernel_initializer(stddev=0.02):
