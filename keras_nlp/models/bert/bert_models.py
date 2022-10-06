@@ -14,6 +14,7 @@
 
 """BERT backbone models."""
 
+import copy
 import os
 
 import tensorflow as tf
@@ -222,7 +223,6 @@ class Bert(keras.Model):
             "max_sequence_length": self.max_sequence_length,
             "num_segments": self.num_segments,
             "dropout": self.dropout,
-            "cls_token_index": self.cls_token_index,
         }
 
     preset_configs = backbone_configs
@@ -230,6 +230,7 @@ class Bert(keras.Model):
 
     @classmethod
     def from_config(cls, config, load_weights=True):
+        config = copy.deepcopy(config)
         if isinstance(config, str):
             config = backbone_configs[config]
         if load_weights is False:

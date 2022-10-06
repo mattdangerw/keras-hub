@@ -13,6 +13,7 @@
 # limitations under the License.
 """BERT task specific models and heads."""
 
+import copy
 import os
 
 from tensorflow import keras
@@ -113,6 +114,7 @@ class BertClassifier(keras.Model):
 
     @classmethod
     def from_config(cls, config, load_weights=True):
+        config = copy.deepcopy(config)
         if isinstance(config, str):
             config = classifier_configs[config]
         if isinstance(config["backbone"], dict):
