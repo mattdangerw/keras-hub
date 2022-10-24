@@ -252,6 +252,16 @@ class Bert(keras.Model):
         model.load_weights(weights)
         return model
 
+    def __call__(self, inputs, **kwargs):
+        # TEMP fix for https://github.com/keras-team/keras-nlp/issues/395
+        def ensure_batch_dim(x):
+            if x.shape.rank == 1:
+                x = tf.expand_dims(x, 0)
+            return x
+
+        inputs = tf.nest.map_structure(ensure_batch_dim, inputs)
+        return super().__call__(inputs, **kwargs)
+
 
 FROM_PRESET_DOCSTRING = """Instantiate BERT model from preset architecture and weights.
 

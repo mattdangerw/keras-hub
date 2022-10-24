@@ -13,8 +13,11 @@
 # limitations under the License.
 
 from keras_nlp.models.bert.bert_models import Bert
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertClassifierPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertPretrainerPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
 from keras_nlp.models.bert.bert_tasks import BertClassifier
+from keras_nlp.models.bert.bert_tasks import BertPretrainer
 from keras_nlp.models.distilbert.distilbert_models import DistilBert
 from keras_nlp.models.distilbert.distilbert_preprocessing import (
     DistilBertPreprocessor,

@@ -17,3 +17,15 @@
 class classproperty(property):
     def __get__(self, _, owner_cls):
         return self.fget(owner_cls)
+
+
+def pack_x_y_sample_weight(x, y=None, sample_weight=None):
+    if y is None:
+        if isinstance(x, dict):
+            return x
+        else:
+            return (x,)
+    elif sample_weight is None:
+        return (x, y)
+    else:
+        return (x, y, sample_weight)

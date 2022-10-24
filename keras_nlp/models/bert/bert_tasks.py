@@ -15,8 +15,13 @@
 
 from tensorflow import keras
 
+from keras_nlp.layers.mlm_head import MLMHead
 from keras_nlp.models.bert.bert_models import Bert
 from keras_nlp.models.bert.bert_models import bert_kernel_initializer
+from keras_nlp.models.bert.bert_preprocessing import BertClassifierPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertPretrainerPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertTokenizer
+from keras_nlp.utils.pipeline_model import PipelineModel
 
 # TODO(jbischof): Find more scalable way to list checkpoints.
 CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
@@ -66,11 +71,13 @@ CLASSIFIER_DOCSTRING = """BERT encoder model with a classification head.
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertClassifier(keras.Model):
+class BertClassifier(PipelineModel):
     def __init__(
         self,
         backbone="bert_base_uncased_en",
         num_classes=2,
+        include_preprocessing=True,
+        preprocessor=None,
         **kwargs,
     ):
         # Load backbone from string identifier
@@ -82,29 +89,52 @@ class BertClassifier(keras.Model):
                     "`backbone` must be one of "
                     f"""{", ".join(Bert.presets)}. Received: {backbone}."""
                 )
-            backbone = Bert.from_preset(backbone)
+            preset = backbone
+            backbone = Bert.from_preset(preset)
+            if include_preprocessing and preprocessor is None:
+                tokenizer = BertTokenizer.from_preset(preset)
+                preprocessor = BertClassifierPreprocessor(tokenizer)
 
         inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         outputs = keras.layers.Dense(
             num_classes,
             kernel_initializer=bert_kernel_initializer(),
-            name="logits",
+            activation="softmax",
+            name="preds",
         )(pooled)
         # Instantiate using Functional API Model constructor
         super().__init__(
             inputs=inputs,
             outputs=outputs,
+            include_preprocessing=include_preprocessing,
             **kwargs,
         )
         # All references to `self` below this line
         self._backbone = backbone
+        self._preprocessor = preprocessor
         self.num_classes = num_classes
+
+        if include_preprocessing and preprocessor is None:
+            raise ValueError("Set preprocessor if `include_preprocessing=True`")
+        if not include_preprocessing and preprocessor is not None:
+            raise ValueError("No preprocessor if `include_preprocessing=False`")
+
+    def preprocess_features(self, x):
+        return self.preprocessor(x, return_targets=False)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        return self.preprocessor(x, y=y, sample_weight=sample_weight)
 
     @property
     def backbone(self):
-        """A `keras_nlp.models.Bert` instance providing the encoder submodel."""
+        """A `keras_nlp.models.Bert` instance providing the preprocessor submodel."""
         return self._backbone
+
+    @property
+    def preprocessor(self):
+        """A `keras_nlp.models.BertClassifierPreprocessor` for preprocessing."""
+        return self._preprocessor
 
     def get_config(self):
         return {
@@ -120,9 +150,156 @@ class BertClassifier(keras.Model):
             config["backbone"] = keras.layers.deserialize(config["backbone"])
         return cls(**config)
 
+    def compile(
+        self,
+        optimizer=None,
+        loss="sparse_categorical_crossentropy",
+        weighted_metrics=["accuracy"],
+        jit_compile=True,
+        **kwargs,
+    ):
+        # TODO: We should be able to use `metrics`, not `weighted_metrics`.
+        # There is an upstream bug.
+        if optimizer is None:
+            optimizer = keras.optimizers.experimental.AdamW(5e-5)
+        return super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            jit_compile=jit_compile,
+            **kwargs,
+        )
+
 
 setattr(
     BertClassifier,
     "__doc__",
     CLASSIFIER_DOCSTRING.format(names=", ".join(Bert.presets)),
 )
+
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class BertPretrainer(PipelineModel):
+    def __init__(
+        self,
+        backbone="bert_base_uncased_en",
+        include_preprocessing=True,
+        preprocessor=None,
+        **kwargs,
+    ):
+        # Load backbone from string identifier
+        # TODO(jbischof): create util function when ready to load backbones in
+        # other task classes (e.g., load_backbone_from_string())
+        if isinstance(backbone, str):
+            if backbone not in Bert.presets:
+                raise ValueError(
+                    "`backbone` must be one of "
+                    f"""{", ".join(Bert.presets)}. Received: {backbone}."""
+                )
+            preset = backbone
+            backbone = Bert.from_preset(preset)
+            if include_preprocessing and preprocessor is None:
+                tokenizer = BertTokenizer.from_preset(preset)
+                preprocessor = BertPretrainerPreprocessor(tokenizer)
+
+        inputs = {
+            **backbone.input,
+            "mask_positions": keras.Input(
+                shape=(None,), dtype="int32", name="mask_positions"
+            ),
+        }
+        backbone_outputs = backbone(backbone.input)
+        mlm_outputs = MLMHead(
+            vocabulary_size=backbone.vocabulary_size,
+            embedding_weights=backbone.token_embedding.embeddings,
+            kernel_initializer=bert_kernel_initializer(),
+            activation="softmax",
+            name="mlm",
+        )(backbone_outputs["sequence_output"], inputs["mask_positions"])
+        nsp_outputs = keras.layers.Dense(
+            2,
+            kernel_initializer=bert_kernel_initializer(),
+            activation="softmax",
+            name="nsp",
+        )(backbone_outputs["pooled_output"])
+        outputs = {
+            "mlm": mlm_outputs,
+            "nsp": nsp_outputs,
+        }
+        # Instantiate using Functional API Model constructor
+        super().__init__(
+            inputs=inputs,
+            outputs=outputs,
+            include_preprocessing=include_preprocessing,
+            **kwargs,
+        )
+        # All references to `self` below this line
+        self._backbone = backbone
+        self._preprocessor = preprocessor
+
+        if include_preprocessing and preprocessor is None:
+            raise ValueError(
+                "Need preprocessor if `include_preprocessing=True`"
+            )
+        if not include_preprocessing and preprocessor is not None:
+            raise ValueError("No preprocessor if `include_preprocessing=False`")
+
+    def preprocess_features(self, x):
+        return self.preprocessor(x, return_targets=False)
+
+    def preprocess_samples(self, x, y=None, sample_weight=None):
+        return self.preprocessor(x, y=y, sample_weight=sample_weight)
+
+    @property
+    def backbone(self):
+        """A `keras_nlp.models.Bert` instance providing the preprocessor submodel."""
+        return self._backbone
+
+    @property
+    def preprocessor(self):
+        """A `keras_nlp.models.BertClassifierPreprocessor` for preprocessing."""
+        return self._preprocessor
+
+    def get_config(self):
+        return {
+            "backbone": keras.layers.serialize(self.backbone),
+            "num_classes": self.num_classes,
+            "name": self.name,
+            "trainable": self.trainable,
+        }
+
+    @classmethod
+    def from_config(cls, config):
+        if "backbone" in config:
+            config["backbone"] = keras.layers.deserialize(config["backbone"])
+        return cls(**config)
+
+    def compile(
+        self,
+        optimizer=None,
+        loss=None,
+        weighted_metrics=None,
+        jit_compile=True,
+        **kwargs,
+    ):
+        # TODO: We should be able to use `metrics`, not `weighted_metrics`.
+        # There is an upstream bug.
+        if optimizer is None:
+            optimizer = keras.optimizers.experimental.AdamW(1e-4)
+        if loss is None:
+            loss = {
+                "mlm": keras.losses.SparseCategoricalCrossentropy(),
+                "nsp": keras.losses.SparseCategoricalCrossentropy(),
+            }
+        if weighted_metrics is None:
+            weighted_metrics = {
+                "mlm": keras.metrics.SparseCategoricalAccuracy(),
+                "nsp": keras.metrics.SparseCategoricalAccuracy(),
+            }
+        return super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            weighted_metrics=weighted_metrics,
+            jit_compile=jit_compile,
+            **kwargs,
+        )

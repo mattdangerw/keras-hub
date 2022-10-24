@@ -16,17 +16,86 @@
 import copy
 import os
 
+import numpy as np
+import tensorflow as tf
 from tensorflow import keras
 
+from keras_nlp.layers.mlm_mask_generator import MLMMaskGenerator
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.utils import classproperty
+from keras_nlp.models.utils import pack_x_y_sample_weight
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
-class BertPreprocessor(keras.layers.Layer):
-    """BERT preprocessing layer.
+class BertTokenizer(WordPieceTokenizer):
+    def __init__(
+        self,
+        vocabulary,
+        lowercase=False,
+        **kwargs,
+    ):
+        super().__init__(
+            vocabulary=vocabulary,
+            lowercase=lowercase,
+            **kwargs,
+        )
+
+        # Check for necessary special tokens.
+        for token in ["[CLS]", "[SEP]", "[PAD]", "[MASK]"]:
+            if token not in self.get_vocabulary():
+                raise ValueError(
+                    f"Cannot find token `'{token}'` in the provided "
+                    f"`vocabulary`. Please provide `'{token}'` in your "
+                    "`vocabulary` or use a pretrained `vocabulary` name."
+                )
+        self.cls_token = "[CLS]"
+        self.sep_token = "[SEP]"
+        self.pad_token = "[PAD]"
+        self.mask_token = "[MASK]"
+        self.cls_token_id = self.token_to_id(self.cls_token)
+        self.sep_token_id = self.token_to_id(self.sep_token)
+        self.pad_token_id = self.token_to_id(self.pad_token)
+        self.mask_token_id = self.token_to_id(self.mask_token)
+
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+
+        vocabulary = keras.utils.get_file(
+            "vocab.txt",
+            metadata["vocabulary_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["vocabulary_hash"],
+        )
+
+        config = metadata["preprocessor_config"]
+        config.update(
+            {
+                "vocabulary": vocabulary,
+            },
+        )
+
+        return cls.from_config({**config, **kwargs})
+
+
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class BertClassifierPreprocessor(keras.layers.Layer):
+    """BERT encoder for classification data.
 
     This preprocessing layer will do three things:
 
@@ -68,7 +137,7 @@ class BertPreprocessor(keras.layers.Layer):
     vocab += ["call", "me", "ish", "##mael", "."]
     vocab += ["oh", "look", "a", "whale"]
     vocab += ["i", "forgot", "my", "home", "##work"]
-    preprocessor = keras_nlp.models.BertPreprocessor(vocabulary=vocab)
+    preprocessor = keras_nlp.models.BertClassifierPreprocessor(vocabulary=vocab)
 
     # Tokenize and pack a single sentence directly.
     preprocessor("The quick brown fox jumped.")
@@ -103,36 +172,22 @@ class BertPreprocessor(keras.layers.Layer):
 
     def __init__(
         self,
-        vocabulary,
-        lowercase=False,
+        tokenizer="bert_base_uncased_en",
         sequence_length=512,
         truncate="round_robin",
         **kwargs,
     ):
         super().__init__(**kwargs)
 
-        self.tokenizer = WordPieceTokenizer(
-            vocabulary=vocabulary,
-            lowercase=lowercase,
-        )
+        # Load backbone from string identifier
+        if isinstance(tokenizer, str):
+            tokenizer = BertTokenizer.from_preset(tokenizer)
 
-        # Check for necessary special tokens.
-        cls_token = "[CLS]"
-        sep_token = "[SEP]"
-        pad_token = "[PAD]"
-        for token in [cls_token, pad_token, sep_token]:
-            if token not in self.tokenizer.get_vocabulary():
-                raise ValueError(
-                    f"Cannot find token `'{token}'` in the provided "
-                    f"`vocabulary`. Please provide `'{token}'` in your "
-                    "`vocabulary` or use a pretrained `vocabulary` name."
-                )
-
-        self.pad_token_id = self.tokenizer.token_to_id(pad_token)
+        self.tokenizer = tokenizer
         self.packer = MultiSegmentPacker(
-            start_value=self.tokenizer.token_to_id(cls_token),
-            end_value=self.tokenizer.token_to_id(sep_token),
-            pad_value=self.pad_token_id,
+            start_value=self.tokenizer.cls_token_id,
+            end_value=self.tokenizer.sep_token_id,
+            pad_value=self.tokenizer.pad_token_id,
             truncate=truncate,
             sequence_length=sequence_length,
         )
@@ -145,113 +200,126 @@ class BertPreprocessor(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "vocabulary": self.tokenizer.vocabulary,
-                "lowercase": self.tokenizer.lowercase,
+                "tokenizer": keras.layers.serialize(self.tokenizer),
                 "sequence_length": self.packer.sequence_length,
                 "truncate": self.packer.truncate,
             }
         )
         return config
 
-    def call(self, inputs):
-        if not isinstance(inputs, (list, tuple)):
-            inputs = [inputs]
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config:
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        return cls(**config)
 
-        inputs = [self.tokenizer(x) for x in inputs]
-        token_ids, segment_ids = self.packer(inputs)
-        return {
+    def call(self, x, y=None, sample_weight=None, return_targets=True):
+        flattened = tf.nest.flatten(x)
+        # TEMP fix for https://github.com/keras-team/keras-nlp/issues/396
+        if flattened and not isinstance(flattened[0], (tf.Tensor, np.ndarray)):
+            x = tf.convert_to_tensor(x)
+        if not isinstance(x, (list, tuple)):
+            x = [x]
+
+        segments = [self.tokenizer(segment) for segment in x]
+        token_ids, segment_ids = self.packer(segments)
+        x = {
             "token_ids": token_ids,
             "segment_ids": segment_ids,
-            "padding_mask": token_ids != self.pad_token_id,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
         }
+        if return_targets:
+            return pack_x_y_sample_weight(x, y, sample_weight)
+        else:
+            return x
 
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
 
-    @classmethod
-    def from_preset(
-        cls,
-        preset,
-        sequence_length=None,
-        truncate="round_robin",
+@keras.utils.register_keras_serializable(package="keras_nlp")
+class BertPretrainerPreprocessor(keras.layers.Layer):
+    def __init__(
+        self,
+        tokenizer="bert_base_uncased_en",
+        sequence_length=512,
+        mask_selection_rate=0.15,
         **kwargs,
     ):
-        if preset not in cls.presets:
-            raise ValueError(
-                "`preset` must be one of "
-                f"""{", ".join(cls.presets)}. Received: {preset}."""
-            )
-        metadata = cls.presets[preset]
+        super().__init__(**kwargs)
 
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
+        # Load backbone from string identifier
+        if isinstance(tokenizer, str):
+            tokenizer = BertTokenizer.from_preset(tokenizer)
+
+        self.tokenizer = tokenizer
+        self.packer = MultiSegmentPacker(
+            start_value=self.tokenizer.cls_token_id,
+            end_value=self.tokenizer.sep_token_id,
+            pad_value=self.tokenizer.pad_token_id,
+            sequence_length=sequence_length,
+        )
+        self.masker = MLMMaskGenerator(
+            vocabulary_size=tokenizer.vocabulary_size(),
+            mask_selection_rate=mask_selection_rate,
+            mask_token_id=tokenizer.mask_token_id,
+            mask_selection_length=int(sequence_length * mask_selection_rate),
+            unselectable_token_ids=[
+                tokenizer.pad_token_id,
+                tokenizer.cls_token_id,
+                tokenizer.sep_token_id,
+            ],
         )
 
-        config = metadata["preprocessor_config"]
-        # Use model's `max_sequence_length` if `sequence_length` unspecified;
-        # otherwise check that `sequence_length` not too long.
-        max_sequence_length = metadata["config"]["max_sequence_length"]
-        if sequence_length is not None:
-            if sequence_length > max_sequence_length:
-                raise ValueError(
-                    f"`sequence_length` cannot be longer than `{preset}` "
-                    f"preset's `max_sequence_length` of {max_sequence_length}. "
-                    f"Received: {sequence_length}."
-                )
-        else:
-            sequence_length = max_sequence_length
+    def vocabulary_size(self):
+        """Returns the vocabulary size of the tokenizer."""
+        return self.tokenizer.vocabulary_size()
 
+    def get_config(self):
+        config = super().get_config()
         config.update(
             {
-                "sequence_length": sequence_length,
-                "vocabulary": vocabulary,
-                "truncate": truncate,
-            },
+                "tokenizer": keras.layers.serialize(self.tokenizer),
+                "sequence_length": self.packer.sequence_length,
+                "mask_selection_rate": self.masker.mask_selection_rate,
+            }
         )
+        return config
 
-        return cls.from_config({**config, **kwargs})
+    @classmethod
+    def from_config(cls, config):
+        if "tokenizer" in config:
+            config["tokenizer"] = keras.layers.deserialize(config["tokenizer"])
+        return cls(**config)
 
+    def call(self, x, y=None, sample_weight=None, return_targets=True):
+        flattened = tf.nest.flatten(x)
+        # TEMP fix for https://github.com/keras-team/keras-nlp/issues/396
+        if flattened and not isinstance(flattened[0], (tf.Tensor, np.ndarray)):
+            x = tf.convert_to_tensor(x)
+        if not isinstance(x, (list, tuple)):
+            x = [x]
 
-FROM_PRESET_DOCSTRING = """Instantiate BERT preprocessor from preset architecture.
-
-    Args:
-        preset: string. Must be one of {names}.
-        sequence_length: int, optional. The length of the packed inputs. Must be
-            equal to or smaller than the `max_sequence_length` of the preset. If
-            left as default, the `max_sequence_length` of the preset will be
-            used.
-        truncate: string. The algorithm to truncate a list of batched segments
-            to fit within `sequence_length`. The value can be either
-            `round_robin` or `waterfall`:
-                - `"round_robin"`: Available space is assigned one token at a
-                    time in a round-robin fashion to the inputs that still need
-                    some, until the limit is reached.
-                - `"waterfall"`: The allocation of the budget is done using a
-                    "waterfall" algorithm that allocates quota in a
-                    left-to-right manner and fills up the buckets until we run
-                    out of budget. It supports an arbitrary number of segments.
-
-    Examples:
-    ```python
-    # Load preprocessor from preset
-    preprocessor = BertPreprocessor.from_preset("bert_base_uncased_en")
-    preprocessor("The quick brown fox jumped.")
-
-    # Override sequence_length
-    preprocessor = BertPreprocessor.from_preset(
-        "bert_base_uncased_en"
-        sequence_length=64
-    )
-    preprocessor("The quick brown fox jumped.")
-    ```
-    """
-
-setattr(
-    BertPreprocessor.from_preset.__func__,
-    "__doc__",
-    FROM_PRESET_DOCSTRING.format(names=", ".join(BertPreprocessor.presets)),
-)
+        segments = [self.tokenizer(segment) for segment in x]
+        token_ids, segment_ids = self.packer(segments)
+        masker_output = self.masker(token_ids)
+        token_ids = masker_output["token_ids"]
+        mask_positions = masker_output["mask_positions"]
+        mask_ids = masker_output["mask_ids"]
+        mask_weights = masker_output["mask_weights"]
+        x = {
+            "token_ids": token_ids,
+            "segment_ids": segment_ids,
+            "padding_mask": token_ids != self.tokenizer.pad_token_id,
+            "mask_positions": mask_positions,
+        }
+        if y is not None:
+            sample_weight = {
+                "mlm": mask_weights,
+                "nsp": tf.ones_like(y, dtype="int32"),
+            }
+            y = {
+                "mlm": mask_ids,
+                "nsp": y,
+            }
+        if return_targets:
+            return pack_x_y_sample_weight(x, y, sample_weight)
+        else:
+            return x

@@ -20,10 +20,10 @@ import tensorflow as tf
 from absl.testing import parameterized
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_preprocessing import BertPreprocessor
+from keras_nlp.models.bert.bert_preprocessing import BertClassifierPreprocessor
 
 
-class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class BertClassifierPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
@@ -31,7 +31,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_tokenize(self):
         input_data = ["THE QUICK BROWN FOX."]
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
         )
@@ -49,7 +49,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
                 "THE QUICK BROWN FOX.",
             ]
         )
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
         )
@@ -65,7 +65,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize_multiple_sentences(self):
         sentence_one = "THE QUICK"
         sentence_two = "BROWN FOX."
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
         )
@@ -93,7 +93,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
                 "BROWN FOX.",
             ]
         )
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
         )
@@ -110,7 +110,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_lowercase(self):
         input_data = ["THE QUICK BROWN FOX."]
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
             lowercase=True,
@@ -120,35 +120,37 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
 
     def test_detokenize(self):
         input_tokens = [[5, 6, 7, 8]]
-        preprocessor = BertPreprocessor(vocabulary=self.vocab)
+        preprocessor = BertClassifierPreprocessor(vocabulary=self.vocab)
         output = preprocessor.tokenizer.detokenize(input_tokens)
         self.assertAllEqual(output, ["THE QUICK BROWN FOX"])
 
     def test_vocabulary_size(self):
-        preprocessor = BertPreprocessor(vocabulary=self.vocab)
+        preprocessor = BertClassifierPreprocessor(vocabulary=self.vocab)
         self.assertEqual(preprocessor.vocabulary_size(), 13)
 
     def test_unknown_preset_error(self):
         # Not a preset name
         with self.assertRaises(ValueError):
-            BertPreprocessor.from_preset("bert_base_uncased_clowntown")
+            BertClassifierPreprocessor.from_preset(
+                "bert_base_uncased_clowntown"
+            )
 
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_valid_call_presets(self, get_file_mock):
         """Ensure presets have necessary structure, but no RCPs."""
         input_data = ["THE QUICK BROWN FOX."]
         get_file_mock.return_value = self.vocab
-        for preset in BertPreprocessor.presets:
-            preprocessor = BertPreprocessor.from_preset(preset)
+        for preset in BertClassifierPreprocessor.presets:
+            preprocessor = BertClassifierPreprocessor.from_preset(preset)
             preprocessor(input_data)
         self.assertEqual(
-            get_file_mock.call_count, len(BertPreprocessor.presets)
+            get_file_mock.call_count, len(BertClassifierPreprocessor.presets)
         )
 
     @unittest.mock.patch("tensorflow.keras.utils.get_file")
     def test_override_preprocessor_sequence_length(self, get_file_mock):
         get_file_mock.return_value = self.vocab
-        preprocessor = BertPreprocessor.from_preset(
+        preprocessor = BertClassifierPreprocessor.from_preset(
             "bert_base_uncased_en",
             sequence_length=64,
         )
@@ -161,7 +163,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         """Override sequence length longer than model's maximum."""
         get_file_mock.return_value = self.vocab
         with self.assertRaises(ValueError):
-            BertPreprocessor.from_preset(
+            BertClassifierPreprocessor.from_preset(
                 "bert_base_uncased_en",
                 sequence_length=1024,
             )
@@ -172,7 +174,7 @@ class BertPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
     )
     def test_saving_model(self, save_format):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
-        preprocessor = BertPreprocessor(
+        preprocessor = BertClassifierPreprocessor(
             vocabulary=self.vocab,
             sequence_length=8,
         )
