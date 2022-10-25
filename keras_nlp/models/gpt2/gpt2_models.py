@@ -14,11 +14,16 @@
 
 """GPT-2 backbone models."""
 
+import copy
+import os
+
 import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.layers import PositionEmbedding
 from keras_nlp.layers import TransformerDecoder
+from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
+from keras_nlp.models.utils import classproperty
 
 
 def _gpt_2_kernel_initializer(stddev=0.02):
@@ -98,12 +103,14 @@ class Gpt2(keras.Model):
         )
 
         # Embed tokens, positions.
-        token_embedding = keras.layers.Embedding(
+        embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=_gpt_2_kernel_initializer(stddev=0.01),
             name="token_embedding",
-        )(token_ids)
+        )
+        embedding_layer.build(None)
+        token_embedding = embedding_layer(token_ids)
 
         # Can't use `TokenAndPositionEmbedding` layer here because of different
         # initializers.
@@ -135,12 +142,15 @@ class Gpt2(keras.Model):
                 name=f"transformer_layer_{i}",
             )(x, decoder_padding_mask=padding_mask)
 
-        sequence_output = keras.layers.LayerNormalization(
+        x = keras.layers.LayerNormalization(
             name="layer_norm",
             axis=-1,
             epsilon=1e-05,
             dtype=tf.float32,
         )(x)
+
+        x = tf.matmul(x, embedding_layer.embeddings, transpose_b=True)
+        outputs = keras.layers.Softmax()(x)
 
         # Set default for `name` if none given
         if "name" not in kwargs:
@@ -152,7 +162,7 @@ class Gpt2(keras.Model):
                 "token_ids": token_ids,
                 "padding_mask": padding_mask,
             },
-            outputs=sequence_output,
+            outputs=outputs,
             **kwargs,
         )
         # All references to `self` below this line
@@ -181,6 +191,10 @@ class Gpt2(keras.Model):
     def from_config(cls, config):
         return cls(**config)
 
+    @classproperty
+    def presets(cls):
+        return copy.deepcopy(backbone_presets)
+
     @classmethod
     def from_preset(
         cls,
@@ -188,4 +202,24 @@ class Gpt2(keras.Model):
         load_weights=True,
         **kwargs,
     ):
-        raise NotImplementedError
+        if preset not in cls.presets:
+            raise ValueError(
+                "`preset` must be one of "
+                f"""{", ".join(cls.presets)}. Received: {preset}."""
+            )
+        metadata = cls.presets[preset]
+        config = metadata["config"]
+        model = cls.from_config({**config, **kwargs})
+
+        if not load_weights:
+            return model
+
+        weights = keras.utils.get_file(
+            "model.h5",
+            metadata["weights_url"],
+            cache_subdir=os.path.join("models", preset),
+            file_hash=metadata["weights_hash"],
+        )
+
+        model.load_weights(weights)
+        return model

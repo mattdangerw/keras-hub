@@ -28,7 +28,7 @@ def _validate_prompt(prompt):
 
 def _validate_token_probability_fn(token_probability_fn, prompt):
     """Helper function to validate `token_probability_fn` output."""
-    test_pred = token_probability_fn(prompt)
+    test_pred = token_probability_fn(prompt, 0)
     if len(test_pred.shape) != 2:
         raise ValueError(
             "Output of `token_probability_fn` is not a 2D tensor, "
@@ -43,11 +43,10 @@ def _get_prompt_shape(prompt):
     """Helper function to get the batch size and prompt length."""
     if isinstance(prompt, tf.Tensor):
         shape = tf.shape(prompt)
-        return (shape[0], shape[1])
+        return (shape[0], tf.constant(0))
     elif isinstance(prompt, tf.RaggedTensor):
         batch_size = prompt.nrows()
-        length = tf.math.reduce_min(tf.RaggedTensor.row_lengths(prompt))
-        return (batch_size, length)
+        return (batch_size, tf.constant(0))
 
 
 def _pad_prompt(prompt, max_length):
@@ -62,18 +61,13 @@ def _pad_prompt(prompt, max_length):
         shape = tf.shape(prompt)
         extra_space = tf.math.maximum(0, max_length - shape[1])
         pad_shape = [shape[0], extra_space]
-
-        mask = tf.ones(shape, tf.bool)
-        mask = tf.concat((mask, tf.zeros(pad_shape, tf.bool)), axis=1)
         prompt = tf.concat((prompt, tf.zeros(pad_shape, prompt.dtype)), axis=1)
     elif isinstance(prompt, tf.RaggedTensor):
         # TODO: `to_tensor()` works with `jit_compile = True` in TF 2.8.x but
         # fails in TF 2.9.x. Fix this. After this issue has been fixed, we can
         # condense the two branches into one by starting off with a ragged tensor.
-        mask = tf.ones_like(prompt, dtype=tf.bool)
-        mask = mask.to_tensor(shape=(None, max_length))
         prompt = prompt.to_tensor(shape=(None, max_length))
-    return prompt, mask
+    return prompt, prompt != 0
 
 
 def _mask_tokens_after_end_token(
@@ -484,13 +478,13 @@ def random_search(
     if input_is_1d:
         prompt = prompt[tf.newaxis, :]
 
-    _validate_token_probability_fn(token_probability_fn, prompt)
-
     batch_size, length = _get_prompt_shape(prompt)
     prompt, mask = _pad_prompt(prompt, max_length)
 
+    _validate_token_probability_fn(token_probability_fn, prompt)
+
     def one_step(length, prompt):
-        pred = token_probability_fn(prompt[:, :length])
+        pred = token_probability_fn(prompt[:, :length], length)
         if from_logits:
             pred = keras.activations.softmax(pred, axis=-1)
         next_token = tf.squeeze(
