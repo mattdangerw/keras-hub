@@ -131,6 +131,28 @@ class BertClassifier(PipelineModel):
             )
         return cls(**config)
 
+    def compile(
+        self,
+        optimizer=None,
+        loss=None,
+        metrics=None,
+        jit_compile=True,
+        **kwargs,
+    ):
+        if optimizer is None:
+            optimizer = keras.optimizers.experimental.AdamW(5e-5)
+        if loss is None:
+            loss = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        if metrics is None:
+            metrics = keras.metrics.SparseCategoricalAccuracy()
+        return super().compile(
+            optimizer=optimizer,
+            loss=loss,
+            metrics=metrics,
+            jit_compile=jit_compile,
+            **kwargs,
+        )
+
     @classproperty
     def presets(cls):
         return copy.deepcopy(backbone_presets)
