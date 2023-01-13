@@ -15,6 +15,7 @@
 """BERT backbone model."""
 
 import copy
+from packaging import version
 
 import tensorflow as tf
 from tensorflow import keras
@@ -119,12 +120,19 @@ class BertBackbone(Backbone):
             shape=(None,), dtype="int32", name="padding_mask"
         )
 
+        # This is a temporary fix for DTensor support.
+        embedding_kwargs = {}
+        if version.parse(tf.__version__) >= version.parse("2.12"):
+            # This is needed for DTensor support.
+            embedding_kwargs["use_one_hot"] = kwargs.pop("use_one_hot", False)
+
         # Embed tokens, positions, and segment ids.
         token_embedding_layer = keras.layers.Embedding(
             input_dim=vocabulary_size,
             output_dim=hidden_dim,
             embeddings_initializer=bert_kernel_initializer(),
             name="token_embedding",
+            **embedding_kwargs,
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
