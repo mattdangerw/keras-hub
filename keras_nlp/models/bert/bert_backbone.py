@@ -223,4 +223,6 @@ class BertBackbone(Backbone):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return copy.deepcopy(
+            {k: backbone_presets[k]["backbone"] for k in backbone_presets}
+        )

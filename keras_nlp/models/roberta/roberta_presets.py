@@ -15,7 +15,8 @@
 
 backbone_presets = {
     "roberta_base_en": {
-        "config": {
+        "backbone": {
+            "class_name": "keras_nlp>RobertaBackbone",
             "vocabulary_size": 50265,
             "num_layers": 12,
             "num_heads": 12,
@@ -23,21 +24,33 @@ backbone_presets = {
             "intermediate_dim": 3072,
             "dropout": 0.1,
             "max_sequence_length": 512,
+            "weights": {
+                "filename": "model.h5",
+                "url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
+                "hash": "958eede1c7edaa9308e027be18fde7a8",
+            },
         },
-        "preprocessor_config": {},
-        "description": (
-            "Base size of RoBERTa where case is maintained."
-            "Trained on a 160 GB English dataset."
-        ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/model.h5",
-        "weights_hash": "958eede1c7edaa9308e027be18fde7a8",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/vocab.json",
-        "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "preprocessor": {
+            "class_name": "keras_nlp>RobertaPreprocessor",
+            "tokenizer": {
+                "class_name": "keras_nlp>RobertaTokenizer",
+                "vocabulary": {
+                    "filename": "vocab.json",
+                    "url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/vocab.json",
+                    "hash": "be4d3c6f3f5495426b2c03b334334354",
+                },
+                "merges": {
+                    "filename": "merges.txt",
+                    "url": "https://storage.googleapis.com/keras-nlp/models/roberta_base_en/v1/merges.txt",
+                    "hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+                },
+            },
+            "sequence_length": 512,
+        },
     },
     "roberta_large_en": {
-        "config": {
+        "backbone": {
+            "class_name": "keras_nlp>RobertaBackbone",
             "vocabulary_size": 50265,
             "num_layers": 24,
             "num_heads": 16,
@@ -45,17 +58,28 @@ backbone_presets = {
             "intermediate_dim": 4096,
             "dropout": 0.1,
             "max_sequence_length": 512,
+            "weights": {
+                "filename": "model.h5",
+                "url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/model.h5",
+                "hash": "1978b864c317a697fe62a894d3664f14",
+            },
         },
-        "preprocessor_config": {},
-        "description": (
-            "Large size of RoBERTa where case is maintained."
-            "Trained on a 160 GB English dataset."
-        ),
-        "weights_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/model.h5",
-        "weights_hash": "1978b864c317a697fe62a894d3664f14",
-        "vocabulary_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/vocab.json",
-        "vocabulary_hash": "be4d3c6f3f5495426b2c03b334334354",
-        "merges_url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/merges.txt",
-        "merges_hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+        "preprocessor": {
+            "class_name": "keras_nlp>RobertaPreprocessor",
+            "tokenizer": {
+                "class_name": "keras_nlp>RobertaTokenizer",
+                "vocabulary": {
+                    "filename": "vocab.json",
+                    "url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/vocab.json",
+                    "hash": "be4d3c6f3f5495426b2c03b334334354",
+                },
+                "merges": {
+                    "filename": "merges.txt",
+                    "url": "https://storage.googleapis.com/keras-nlp/models/roberta_large_en/v1/merges.txt",
+                    "hash": "75a37753dd7a28a2c5df80c28bf06e4e",
+                },
+            },
+            "sequence_length": 512,
+        },
     },
 }

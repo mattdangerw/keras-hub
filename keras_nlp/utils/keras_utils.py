@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import os
 import platform
 
 import tensorflow as tf
@@ -111,3 +112,42 @@ def is_xla_compatible(model):
             tf.distribute.TPUStrategy,
         ),
     )
+
+
+def download_asset(preset, config):
+    return keras.utils.get_file(
+        config["filename"],
+        config["url"],
+        cache_subdir=os.path.join("models", preset),
+        file_hash=config["hash"],
+    )
+
+
+def deserialize_preset(cls, preset, config, load_weights=True):
+    # A few special properties should not be forwarded to the class constructor.
+    config.pop("class_name", None)
+    config.pop("metadata", None)
+    weights = config.pop("weights", None)
+
+    # Check out config for assets and preset objects.
+    for key, value in config.items():
+        if isinstance(value, dict):
+            if set(("filename", "url", "hash")) == set(value.keys()):
+                # If we got an asset, download it.
+                config[key] = download_asset(preset, value)
+            else:
+                # If we got a preset recurse into it's `from_preset()`.
+                cls_name = value["class_name"]
+                nested_cls = keras.utils.get_registered_object(cls_name)
+                config[key] = deserialize_preset(
+                    nested_cls, preset, value, load_weights=load_weights
+                )
+
+    # Call the class constructor with our resolved arguments.
+    obj = cls(**config)
+
+    # As a final optional step, load any weights.
+    if load_weights and weights:
+        obj.load_weights(download_asset(preset, weights))
+
+    return obj

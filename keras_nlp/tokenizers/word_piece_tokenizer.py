@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 from typing import Iterable
 from typing import List
 
@@ -20,6 +19,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from keras_nlp.tokenizers import tokenizer
+from keras_nlp.utils.keras_utils import deserialize_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 from keras_nlp.utils.tf_utils import assert_tf_text_installed
@@ -458,23 +458,9 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        metadata = cls.presets[preset]
 
-        vocabulary = keras.utils.get_file(
-            "vocab.txt",
-            metadata["vocabulary_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["vocabulary_hash"],
-        )
-
-        config = metadata["preprocessor_config"]
-        config.update(
-            {
-                "vocabulary": vocabulary,
-            },
-        )
-
-        return cls.from_config({**config, **kwargs})
+        config = {**cls.presets[preset], **kwargs}
+        return deserialize_preset(cls, preset, config)
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

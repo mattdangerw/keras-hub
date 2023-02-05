@@ -17,9 +17,7 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
-from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.utils.keras_utils import is_xla_compatible
@@ -213,14 +211,6 @@ class RobertaClassifier(Task):
             }
         )
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return RobertaBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return RobertaPreprocessor
 
     @classproperty
     def presets(cls):

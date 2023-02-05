@@ -109,4 +109,7 @@ class BertTokenizer(WordPieceTokenizer):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy({**backbone_presets, **classifier_presets})
+        presets = {**backbone_presets, **classifier_presets}
+        return copy.deepcopy(
+            {k: presets[k]["preprocessor"]["tokenizer"] for k in presets}
+        )

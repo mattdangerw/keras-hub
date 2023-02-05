@@ -20,7 +20,6 @@ from tensorflow import keras
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
-from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
@@ -189,9 +188,6 @@ class BertPreprocessor(Preprocessor):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
-    def tokenizer_cls(cls):
-        return BertTokenizer
-
-    @classproperty
     def presets(cls):
-        return copy.deepcopy({**backbone_presets, **classifier_presets})
+        presets = {**backbone_presets, **classifier_presets}
+        return copy.deepcopy({k: presets[k]["preprocessor"] for k in presets})

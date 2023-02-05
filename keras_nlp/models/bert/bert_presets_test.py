@@ -115,17 +115,15 @@ class BertPresetSmokeTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(AttributeError):
             obj.presets = {"my_model": "clowntown"}
         # Cannot mutate presents in an object
-        config = obj.presets[preset]["config"]
-        config["num_layers"] = 1
-        self.assertEqual(config["num_layers"], 1)
-        self.assertEqual(obj.presets[preset]["config"]["num_layers"], 2)
+        config = obj.presets[preset]
+        config["foo"] = 1
+        self.assertEqual(config["foo"], 1)
+        self.assertNotIn("foo", obj.presets[preset])
         # Cannot mutate presets in the class
-        config = BertBackbone.presets[preset]["config"]
-        config["num_layers"] = 1
-        self.assertEqual(config["num_layers"], 1)
-        self.assertEqual(
-            BertBackbone.presets[preset]["config"]["num_layers"], 2
-        )
+        config = BertBackbone.presets[preset]
+        config["foo"] = 1
+        self.assertEqual(config["foo"], 1)
+        self.assertNotIn("foo", BertBackbone.presets[preset])
 
     @parameterized.named_parameters(
         ("bert_tokenizer", BertTokenizer),

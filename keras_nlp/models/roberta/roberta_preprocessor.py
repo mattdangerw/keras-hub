@@ -23,7 +23,6 @@ from keras_nlp.models.roberta.roberta_multi_segment_packer import (
     RobertaMultiSegmentPacker,
 )
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
-from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 from keras_nlp.utils.keras_utils import (
     convert_inputs_to_list_of_tensor_segments,
 )
@@ -188,9 +187,7 @@ class RobertaPreprocessor(Preprocessor):
         return pack_x_y_sample_weight(x, y, sample_weight)
 
     @classproperty
-    def tokenizer_cls(cls):
-        return RobertaTokenizer
-
-    @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return copy.deepcopy(
+            {k: backbone_presets[k]["preprocessor"] for k in backbone_presets}
+        )

@@ -14,10 +14,9 @@
 
 """Base class for Backbone models."""
 
-import os
-
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import deserialize_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -78,7 +77,6 @@ class Backbone(keras.Model):
         )
         ```
         """
-
         if not cls.presets:
             raise NotImplementedError(
                 "No presets have been created for this class."
@@ -89,22 +87,11 @@ class Backbone(keras.Model):
                 "`preset` must be one of "
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
 
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
+        config = {**cls.presets[preset], **kwargs}
+        return deserialize_preset(
+            cls, preset, config, load_weights=load_weights
         )
-
-        model.load_weights(weights)
-        return model
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.

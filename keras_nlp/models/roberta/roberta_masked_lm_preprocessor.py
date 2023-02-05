@@ -14,12 +14,16 @@
 
 """RoBERTa masked language model preprocessor layer."""
 
+import copy
+
 from absl import logging
 from tensorflow import keras
 
 from keras_nlp.layers.masked_lm_mask_generator import MaskedLMMaskGenerator
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
+from keras_nlp.models.roberta.roberta_presets import backbone_presets
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+from keras_nlp.utils.python_utils import classproperty
 
 
 @keras.utils.register_keras_serializable(package="keras_nlp")
@@ -173,3 +177,12 @@ class RobertaMaskedLMPreprocessor(RobertaPreprocessor):
         y = masker_outputs["mask_ids"]
         sample_weight = masker_outputs["mask_weights"]
         return pack_x_y_sample_weight(x, y, sample_weight)
+
+    @classproperty
+    def presets(cls):
+        presets = copy.deepcopy(backbone_presets)
+        for k, v in presets.items():
+            v = v["preprocessor"]
+            v["class_name"] = keras.utils.get_registered_name(cls)
+            presets[k] = v
+        return presets

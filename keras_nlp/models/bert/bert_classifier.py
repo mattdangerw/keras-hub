@@ -17,9 +17,7 @@ import copy
 
 from tensorflow import keras
 
-from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
-from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.bert.bert_presets import classifier_presets
 from keras_nlp.models.task import Task
@@ -208,14 +206,6 @@ class BertClassifier(Task):
             }
         )
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return BertBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return BertPreprocessor
 
     @classproperty
     def presets(cls):

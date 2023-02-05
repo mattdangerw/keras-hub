@@ -120,4 +120,9 @@ class RobertaTokenizer(BytePairTokenizer):
 
     @classproperty
     def presets(cls):
-        return copy.deepcopy(backbone_presets)
+        return copy.deepcopy(
+            {
+                k: backbone_presets[k]["preprocessor"]["tokenizer"]
+                for k in backbone_presets
+            }
+        )

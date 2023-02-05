@@ -13,10 +13,9 @@
 # limitations under the License.
 """Base class for Task models."""
 
-import os
-
 from tensorflow import keras
 
+from keras_nlp.utils.keras_utils import deserialize_preset
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -121,31 +120,10 @@ class Task(PipelineModel):
                 f"""{", ".join(cls.presets)}. Received: {preset}."""
             )
 
-        if "preprocessor" not in kwargs:
-            kwargs["preprocessor"] = cls.preprocessor_cls.from_preset(preset)
-
-        # Check if preset is backbone-only model
-        if preset in cls.backbone_cls.presets:
-            backbone = cls.backbone_cls.from_preset(preset, load_weights)
-            return cls(backbone, **kwargs)
-
-        # Otherwise must be one of class presets
-        metadata = cls.presets[preset]
-        config = metadata["config"]
-        model = cls.from_config({**config, **kwargs})
-
-        if not load_weights:
-            return model
-
-        weights = keras.utils.get_file(
-            "model.h5",
-            metadata["weights_url"],
-            cache_subdir=os.path.join("models", preset),
-            file_hash=metadata["weights_hash"],
+        config = {**cls.presets[preset], **kwargs}
+        return deserialize_preset(
+            cls, preset, config, load_weights=load_weights
         )
-
-        model.load_weights(weights)
-        return model
 
     def __init_subclass__(cls, **kwargs):
         # Use __init_subclass__ to setup a correct docstring for from_preset.
