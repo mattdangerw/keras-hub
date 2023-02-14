@@ -211,9 +211,8 @@ class TransformerDecoder(keras.layers.Layer):
         decoder_attention_mask=None,
         encoder_padding_mask=None,
         encoder_attention_mask=None,
-        current_index=None,
-        key_cache=None,
-        value_cache=None,
+        cache=None,
+        cache_index=None,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -264,12 +263,12 @@ class TransformerDecoder(keras.layers.Layer):
             )
 
         x = decoder_sequence  # Intermediate result.
-        has_cache = None not in (current_index, key_cache, value_cache)
+        has_cache = None not in (cache, cache_index)
 
         # Compute self attention mask.
         source_length = dest_length = tf.shape(decoder_sequence)[1]
         if has_cache:
-            source_length = tf.shape(key_cache)[1]
+            source_length = tf.shape(cache)[2]
         self_attention_mask = compute_causal_mask(
             source_length, dest_length, "int32"
         )
@@ -283,21 +282,13 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        if has_cache:
-            x, key_cache, value_cache = self._self_attention_layer(
-                query=x,
-                value=x,
-                attention_mask=self_attention_mask,
-                current_index=current_index,
-                key_cache=key_cache,
-                value_cache=value_cache,
-            )
-        else:
-            x = self._self_attention_layer(
-                query=x,
-                value=x,
-                attention_mask=self_attention_mask,
-            )
+        x, cache = self._self_attention_layer(
+            query=x,
+            value=x,
+            attention_mask=self_attention_mask,
+            cache=cache,
+            cache_index=cache_index,
+        )
         x = self._self_attention_dropout(x)
         x = x + residual
         if not self.normalize_first:
@@ -336,7 +327,7 @@ class TransformerDecoder(keras.layers.Layer):
             x = self._feedforward_layernorm(x)
 
         if has_cache:
-            return x, key_cache, value_cache
+            return x, cache
         return x
 
     def get_config(self):

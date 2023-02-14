@@ -200,39 +200,32 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def build_cache(self, batch_size, sequence_length):
-        cache = []
-        for _ in range(self.backbone.num_layers):
-            num_heads = self.backbone.num_heads
-            head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-            shape = (batch_size, sequence_length, num_heads, head_dim)
-            cache.append((tf.zeros(shape), tf.zeros(shape)))
-        return cache
+    def build_cache(self, batch_size, length):
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        shape = (batch_size, num_layers, 2, length, num_heads, head_dim)
+        return tf.zeros(shape)
 
     def build_model_with_cache(self):
-        # Extra inputs
         token_ids = self.backbone.input["token_ids"]
         padding_mask = self.backbone.input["padding_mask"]
-        current_index = keras.Input(
-            batch_input_shape=(), dtype="int32", name="current_index"
-        )
-        input_cache = []
+        # Cache inputs
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_heads
         head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-        for i in range(self.backbone.num_layers):
-            key = keras.Input(
-                shape=(None, self.backbone.num_heads, head_dim),
-                name=f"cached_key_{i}",
-            )
-            value = keras.Input(
-                shape=(None, self.backbone.num_heads, head_dim),
-                name=f"cached_value_{i}",
-            )
-            input_cache.append((key, value))
+        input_cache = keras.Input(
+            shape=(num_layers, 2, None, num_heads, head_dim),
+            name="cache",
+        )
+        cache_index = keras.Input(
+            batch_input_shape=(), dtype="int32", name="cache_index"
+        )
         # Embed tokens, positions.
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
             token_embedding,
-            start_index=current_index,
+            start_index=cache_index,
         )
         # Sum and apply dropout to embeddings.
         x = self.backbone.get_layer("embeddings_sum")(
@@ -242,15 +235,14 @@ class GPT2CausalLM(Task):
         # Apply successive transformer decoder blocks with a cache.
         output_cache = []
         for i in range(self.backbone.num_layers):
-            key, value = input_cache[i]
-            x, key, value = self.backbone.get_layer(f"transformer_layer_{i}")(
+            x, cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
                 decoder_padding_mask=padding_mask,
-                current_index=current_index,
-                key_cache=key,
-                value_cache=value,
+                cache=input_cache[:, i, ...],
+                cache_index=cache_index,
             )
-            output_cache.append((key, value))
+            output_cache.append(cache)
+        output_cache = tf.stack(output_cache, axis=1)
         # Final layer norm.
         x = self.backbone.get_layer("layer_norm")(x)
         # Language model logits.
@@ -260,14 +252,12 @@ class GPT2CausalLM(Task):
             transpose_b=True,
         )
         return keras.Model(
-            inputs=(
-                {
-                    "token_ids": token_ids,
-                    "padding_mask": padding_mask,
-                    "cache": input_cache,
-                    "current_index": current_index,
-                }
-            ),
+            inputs={
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+                "cache": input_cache,
+                "cache_index": cache_index,
+            },
             outputs=(outputs, output_cache),
         )
 
@@ -300,13 +290,13 @@ class GPT2CausalLM(Task):
 
         model_with_cache = self.build_model_with_cache()
 
-        def next_token_fn(prompt, mask, cache, current_index):
+        def next_token_fn(prompt, mask, cache, cache_index):
             return model_with_cache(
                 {
                     "token_ids": prompt,
                     "padding_mask": mask,
                     "cache": cache,
-                    "current_index": current_index,
+                    "cache_index": cache_index,
                 }
             )
 

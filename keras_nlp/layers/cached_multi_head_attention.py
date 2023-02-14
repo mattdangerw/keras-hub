@@ -63,9 +63,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         value,
         key=None,
         attention_mask=None,
-        current_index=None,
-        key_cache=None,
-        value_cache=None,
+        cache=None,
+        cache_index=None,
     ):
         if not self._built_from_signature:
             self._build_from_signature(query=query, value=value, key=key)
@@ -76,13 +75,16 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         key = self._key_dense(key)
         value = self._value_dense(value)
 
-        if None not in (current_index, key_cache, value_cache):
+        if None not in (cache, cache_index):
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
             key = key_cache = dynamic_update_slice(
-                key_cache, key, [0, current_index, 0, 0]
+                key_cache, key, [0, cache_index, 0, 0]
             )
             value = value_cache = dynamic_update_slice(
-                value_cache, value, [0, current_index, 0, 0]
+                value_cache, value, [0, cache_index, 0, 0]
             )
+            cache = tf.stack((key_cache, value_cache), axis=1)
 
         query = tf.multiply(query, 1.0 / tf.math.sqrt(float(self._key_dim)))
         attention_scores = tf.einsum(self._dot_product_equation, key, query)
@@ -96,6 +98,4 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         )
         attention_output = self._output_dense(attention_output)
 
-        if None in (current_index, key_cache, value_cache):
-            return attention_output
-        return attention_output, key_cache, value_cache
+        return attention_output, cache
