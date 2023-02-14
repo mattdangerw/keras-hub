@@ -283,13 +283,7 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        if None in (current_index, key_cache, value_cache):
-            x = self._self_attention_layer(
-                query=x,
-                value=x,
-                attention_mask=self_attention_mask,
-            )
-        else:
+        if has_cache:
             x, key_cache, value_cache = self._self_attention_layer(
                 query=x,
                 value=x,
@@ -297,6 +291,12 @@ class TransformerDecoder(keras.layers.Layer):
                 current_index=current_index,
                 key_cache=key_cache,
                 value_cache=value_cache,
+            )
+        else:
+            x = self._self_attention_layer(
+                query=x,
+                value=x,
+                attention_mask=self_attention_mask,
             )
         x = self._self_attention_dropout(x)
         x = x + residual
@@ -335,9 +335,9 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        if None in (current_index, key_cache, value_cache):
-            return x
-        return x, key_cache, value_cache
+        if has_cache:
+            return x, key_cache, value_cache
+        return x
 
     def get_config(self):
         config = super().get_config()

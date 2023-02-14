@@ -46,11 +46,6 @@ call_args_docstring = """
         decoding faster by avoiding duplicated computation. See more
         details in the docstring of
         `keras_nlp.layers.CachedMultiHeadAttention`.
-    token_probs: a dense float tensor of shape
-        `[batch_size, max_length, vocab_size]`. The next token
-        probability (or logits) of tokens in the prompt. If the
-        prompt is batched, then `token_probs` only has valid values for
-        `[batch_size, shortest_prompt_length, vocab_size]`.
     """
 
 
@@ -344,7 +339,7 @@ class Sampler:
         prompt, mask, cache, current_index = tf.while_loop(
             cond,
             body,
-            loop_vars=[prompt, mask, cache, current_index],
+            loop_vars=(prompt, mask, cache, current_index),
         )
         return prompt
 

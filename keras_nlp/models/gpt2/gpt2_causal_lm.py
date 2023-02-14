@@ -200,7 +200,7 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def build_initial_cache(self, batch_size, sequence_length):
+    def build_cache(self, batch_size, sequence_length):
         cache = []
         for _ in range(self.backbone.num_layers):
             num_heads = self.backbone.num_heads
@@ -317,6 +317,6 @@ class GPT2CausalLM(Task):
             next_token_fn,
             max_length=max_length,
             end_token_id=self.preprocessor.tokenizer.end_token_id,
-            cache=self.build_initial_cache(batch_size, max_length),
+            cache=self.build_cache(batch_size, max_length),
         )
         return self.preprocessor.tokenizer.detokenize(generated)
