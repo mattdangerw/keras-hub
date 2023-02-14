@@ -308,12 +308,12 @@ class Sampler:
             return current_index < max_length
 
         def body(prompt, mask, cache, current_index, seed_cache=False):
-            last_index = current_index - 1
             if seed_cache:
-                current_prompt = prompt[:, 0:current_index]
+                last_index = 0
             else:
-                current_prompt = prompt[:, last_index:current_index]
+                last_index = current_index - 1
 
+            current_prompt = prompt[:, last_index:current_index]
             probs, cache = token_probability_fn(
                 current_prompt,
                 mask,
@@ -321,20 +321,20 @@ class Sampler:
                 last_index,
             )
 
-            next_probs = probs[:, last_index, :]
+            next_probs = probs[:, -1, :]
             if from_logits:
                 next_probs = tf.nn.softmax(next_probs, axis=-1)
 
             next_token = self.get_next_token(next_probs)
             next_token = tf.cast(next_token, prompt.dtype)
             mask = dynamic_update_slice(
-                mask, tf.repeat(True, batch_size), [0, current_index]
+                mask, tf.fill([batch_size, 1], True), [0, current_index]
             )
             prompt = dynamic_update_slice(
-                prompt, next_token, [0, current_index]
+                prompt, next_token[:, tf.newaxis], [0, current_index]
             )
             current_index = tf.add(current_index, 1)
-            return [current_index, prompt, mask, cache, probs]
+            return prompt, mask, cache, current_index
 
         # Run a first iteration of the body to seed the cache.
         prompt, mask, cache, current_index = body(

@@ -230,10 +230,11 @@ class GPT2Backbone(Backbone):
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
 
-    def build_initial_cache(self, bs):
+    def build_initial_cache(self, batch_size, sequence_length):
         cache = []
         for key, value in self.backbone_with_cache.input["cache"]:
-            shape = (bs, self.num_heads, self.hidden_dim // self.num_heads)
+            head_dim = self.hidden_dim // self.num_heads
+            shape = (batch_size, sequence_length, self.num_heads, head_dim)
             key = tf.zeros(shape)
             value = tf.zeros(shape)
             cache.append((key, value))

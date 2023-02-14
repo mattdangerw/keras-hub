@@ -103,7 +103,7 @@ class PositionEmbedding(keras.layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, inputs, start_index=None):
+    def call(self, inputs, start_index=0):
         if isinstance(inputs, tf.RaggedTensor):
             bounding_shape = inputs.bounding_shape()
             position_embeddings = self._trim_and_broadcast_position_embeddings(
@@ -126,7 +126,7 @@ class PositionEmbedding(keras.layers.Layer):
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
         position_embeddings = self.position_embeddings[
-            start_index:input_length, :
+            start_index : start_index + input_length, :
         ]
         # then broadcast to add the missing dimensions to match "shape"
         return tf.broadcast_to(position_embeddings, shape)

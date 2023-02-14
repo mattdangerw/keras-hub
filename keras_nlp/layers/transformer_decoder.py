@@ -264,9 +264,15 @@ class TransformerDecoder(keras.layers.Layer):
             )
 
         x = decoder_sequence  # Intermediate result.
+        has_cache = None not in (current_index, key_cache, value_cache)
 
         # Compute self attention mask.
-        self_attention_mask = compute_causal_mask(decoder_sequence)
+        source_length = dest_length = tf.shape(decoder_sequence)[1]
+        if has_cache:
+            source_length = tf.shape(key_cache)[1]
+        self_attention_mask = compute_causal_mask(
+            source_length, dest_length, "int32"
+        )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )

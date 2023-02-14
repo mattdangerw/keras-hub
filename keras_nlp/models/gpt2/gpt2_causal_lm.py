@@ -261,6 +261,6 @@ class GPT2CausalLM(Task):
             self._generate_next_token,
             max_length=max_length,
             end_token_id=self.preprocessor.tokenizer.end_token_id,
-            cache=self.backbone.build_initial_cache(batch_size),
+            cache=self.backbone.build_initial_cache(batch_size, max_length),
         )
         return self.preprocessor.tokenizer.detokenize(generated)

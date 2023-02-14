@@ -63,7 +63,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         value,
         key=None,
         attention_mask=None,
-        use_causal_mask=True,
         current_index=None,
         key_cache=None,
         value_cache=None,
@@ -72,14 +71,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             self._build_from_signature(query=query, value=value, key=key)
         if key is None:
             key = value
-
-        attention_mask = self._compute_attention_mask(
-            query,
-            value,
-            key=key,
-            attention_mask=attention_mask,
-            use_causal_mask=use_causal_mask,
-        )
 
         query = self._query_dense(query)
         key = self._key_dense(key)
