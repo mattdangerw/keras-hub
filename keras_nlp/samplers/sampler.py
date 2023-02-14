@@ -333,8 +333,7 @@ class Sampler:
             prompt = dynamic_update_slice(
                 prompt, next_token[:, tf.newaxis], [0, current_index]
             )
-            current_index = tf.add(current_index, 1)
-            return prompt, mask, cache, current_index
+            return prompt, mask, cache, current_index + 1
 
         # Run a first iteration of the body to seed the cache.
         prompt, mask, cache, current_index = body(

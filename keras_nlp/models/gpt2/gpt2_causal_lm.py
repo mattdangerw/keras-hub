@@ -185,22 +185,6 @@ class GPT2CausalLM(Task):
             **kwargs,
         )
 
-        # Also wrap the cached forward pass.
-        inputs = backbone.backbone_with_cache.input
-        outputs = backbone.backbone_with_cache(inputs)
-        logit_output = tf.matmul(
-            outputs["sequence_output"],
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
-        self.masked_lm_with_cache = keras.Model(
-            inputs=inputs,
-            outputs={
-                "logit_output": logit_output,
-                "cache": outputs["cache"],
-            },
-        )
-
         self.backbone = backbone
         self.preprocessor = preprocessor
 
@@ -216,16 +200,76 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def _generate_next_token(self, prompt, mask, cache, current_index):
-        outputs = self.masked_lm_with_cache(
-            {
-                "token_ids": prompt,
-                "padding_mask": mask,
-                "cache": cache,
-                "current_index": current_index,
-            }
+    def build_initial_cache(self, batch_size, sequence_length):
+        cache = []
+        for _ in range(self.backbone.num_layers):
+            num_heads = self.backbone.num_heads
+            head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+            shape = (batch_size, sequence_length, num_heads, head_dim)
+            cache.append((tf.zeros(shape), tf.zeros(shape)))
+        return cache
+
+    def build_model_with_cache(self):
+        # Extra inputs
+        token_ids = self.backbone.input["token_ids"]
+        padding_mask = self.backbone.input["padding_mask"]
+        current_index = keras.Input(
+            batch_input_shape=(), dtype="int32", name="current_index"
         )
-        return outputs["logit_output"], outputs["cache"]
+        input_cache = []
+        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        for i in range(self.backbone.num_layers):
+            key = keras.Input(
+                shape=(None, self.backbone.num_heads, head_dim),
+                name=f"cached_key_{i}",
+            )
+            value = keras.Input(
+                shape=(None, self.backbone.num_heads, head_dim),
+                name=f"cached_value_{i}",
+            )
+            input_cache.append((key, value))
+        # Embed tokens, positions.
+        token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
+        position_embedding = self.backbone.get_layer("position_embedding")(
+            token_embedding,
+            start_index=current_index,
+        )
+        # Sum and apply dropout to embeddings.
+        x = self.backbone.get_layer("embeddings_sum")(
+            (token_embedding, position_embedding),
+        )
+        x = self.backbone.get_layer("embeddings_dropout")(x)
+        # Apply successive transformer decoder blocks with a cache.
+        output_cache = []
+        for i in range(self.backbone.num_layers):
+            key, value = input_cache[i]
+            x, key, value = self.backbone.get_layer(f"transformer_layer_{i}")(
+                x,
+                decoder_padding_mask=padding_mask,
+                current_index=current_index,
+                key_cache=key,
+                value_cache=value,
+            )
+            output_cache.append((key, value))
+        # Final layer norm.
+        x = self.backbone.get_layer("layer_norm")(x)
+        # Language model logits.
+        outputs = tf.matmul(
+            x,
+            self.backbone.token_embedding.embeddings,
+            transpose_b=True,
+        )
+        return keras.Model(
+            inputs=(
+                {
+                    "token_ids": token_ids,
+                    "padding_mask": padding_mask,
+                    "cache": input_cache,
+                    "current_index": current_index,
+                }
+            ),
+            outputs=(outputs, output_cache),
+        )
 
     def generate(
         self,
@@ -254,13 +298,25 @@ class GPT2CausalLM(Task):
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
 
+        model_with_cache = self.build_model_with_cache()
+
+        def next_token_fn(prompt, mask, cache, current_index):
+            return model_with_cache(
+                {
+                    "token_ids": prompt,
+                    "padding_mask": mask,
+                    "cache": cache,
+                    "current_index": current_index,
+                }
+            )
+
         prompt = self.preprocessor.tokenizer(prompt)
         batch_size = 1 if prompt.shape.rank == 1 else prompt.shape.as_list()[0]
         generated = sampler(
             prompt,
-            self._generate_next_token,
+            next_token_fn,
             max_length=max_length,
             end_token_id=self.preprocessor.tokenizer.end_token_id,
-            cache=self.backbone.build_initial_cache(batch_size, max_length),
+            cache=self.build_initial_cache(batch_size, max_length),
         )
         return self.preprocessor.tokenizer.detokenize(generated)

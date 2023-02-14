@@ -164,62 +164,6 @@ class GPT2Backbone(Backbone):
             outputs=sequence_output,
             **kwargs,
         )
-        self._self_setattr_tracking = False  # TODO, fix.
-        # ===== Begin separate forward pass for generation =====
-        # Extra inputs
-        current_index = keras.Input(
-            batch_input_shape=(), dtype="int32", name="current_index"
-        )
-        input_cache = []
-        for i in range(num_layers):
-            key = keras.Input(
-                shape=(None, num_heads, hidden_dim // num_heads),
-                name=f"cached_key_{i}",
-            )
-            value = keras.Input(
-                shape=(None, num_heads, hidden_dim // num_heads),
-                name=f"cached_value_{i}",
-            )
-            input_cache.append((key, value))
-        # Embed tokens, positions.
-        token_embedding = self.get_layer("token_embedding")(token_ids)
-        position_embedding = self.get_layer("position_embedding")(
-            token_embedding,
-            start_index=current_index,
-        )
-        # Sum and apply dropout to embeddings.
-        x = self.get_layer("embeddings_sum")(
-            (token_embedding, position_embedding),
-        )
-        x = self.get_layer("embeddings_dropout")(x)
-        # Apply successive transformer decoder blocks with a cache.
-        output_cache = []
-        for i in range(num_layers):
-            key, value = input_cache[i]
-            x, key, value = self.get_layer(f"transformer_layer_{i}")(
-                x,
-                decoder_padding_mask=padding_mask,
-                current_index=current_index,
-                key_cache=key,
-                value_cache=value,
-            )
-            output_cache.append((key, value))
-        # Final layer norm.
-        sequence_output = self.get_layer("layer_norm")(x)
-        self.backbone_with_cache = keras.Model(
-            inputs={
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-                "cache": input_cache,
-                "current_index": current_index,
-            },
-            outputs={
-                "sequence_output": sequence_output,
-                "cache": output_cache,
-            },
-            **kwargs,
-        )
-        # ===== End separate forward pass for generation =====
 
         # All references to `self` below this line
         self.vocabulary_size = vocabulary_size
@@ -229,16 +173,6 @@ class GPT2Backbone(Backbone):
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
         self.max_sequence_length = max_sequence_length
-
-    def build_initial_cache(self, batch_size, sequence_length):
-        cache = []
-        for key, value in self.backbone_with_cache.input["cache"]:
-            head_dim = self.hidden_dim // self.num_heads
-            shape = (batch_size, sequence_length, self.num_heads, head_dim)
-            key = tf.zeros(shape)
-            value = tf.zeros(shape)
-            cache.append((key, value))
-        return cache
 
     def get_config(self):
         config = super().get_config()
