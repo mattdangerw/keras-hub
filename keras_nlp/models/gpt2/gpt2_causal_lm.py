@@ -17,7 +17,6 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -186,6 +185,22 @@ class GPT2CausalLM(Task):
             **kwargs,
         )
 
+        # Also wrap the cached forward pass.
+        inputs = backbone.backbone_with_cache.input
+        outputs = backbone.backbone_with_cache(inputs)
+        logit_output = tf.matmul(
+            outputs["sequence_output"],
+            backbone.token_embedding.embeddings,
+            transpose_b=True,
+        )
+        self.masked_lm_with_cache = keras.Model(
+            inputs=inputs,
+            outputs={
+                "logit_output": logit_output,
+                "cache": outputs["cache"],
+            },
+        )
+
         self.backbone = backbone
         self.preprocessor = preprocessor
 
@@ -201,64 +216,21 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, inputs, cache, current_index=None):
-        output, cache = self.backbone.call_with_cache(
-            inputs, cache, current_index
+    def _generate_next_token(self, prompt, mask, cache, current_index):
+        outputs = self.masked_lm_with_cache(
+            {
+                "token_ids": prompt,
+                "padding_mask": mask,
+                "cache": cache,
+                "current_index": current_index,
+            }
         )
-        output = tf.matmul(
-            output,
-            self.backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
-        return output, cache
-
-    def build_initial_cache(self, x, max_length):
-        output, cache = self.backbone.build_initial_cache(x, max_length)
-        output = tf.matmul(
-            output,
-            self.backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
-        return output, cache
-
-    def _get_token_probability_with_cache(
-        self,
-        prompt,
-        mask,
-        current_index=None,
-        cache=None,
-        existing_outputs=None,
-    ):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        if current_index is None and cache is None:
-            return self(model_inputs)
-        output, cache = self.call_with_cache(
-            model_inputs,
-            cache,
-            current_index,
-        )
-        existing_outputs = dynamic_update_slice(
-            existing_outputs,
-            output,
-            [0, current_index, 0],
-        )
-        return existing_outputs, cache
-
-    def _get_token_probability(self, prompt, mask, current_index=None):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        return self(model_inputs)
+        return outputs["logit_output"], outputs["cache"]
 
     def generate(
         self,
         prompt,
         max_length,
-        use_cache=True,
         sampler="top_k",
     ):
         """Generate text.
@@ -275,37 +247,20 @@ class GPT2CausalLM(Task):
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """
-        end_token_id = self.preprocessor.tokenizer.end_token_id
-
         sampler = keras_nlp.samplers.get(sampler)
         if hasattr(self, "jit_compile"):
             # `jit_compile` is a public property as of tf 2.12. hasattr is for
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
-        initial_output, cache = None, None
-        if use_cache:
-            x, y, sw = self.preprocessor(prompt)
-            token_ids = x["token_ids"]
-            padding_mask = x["padding_mask"]
-            if len(token_ids.shape) == 1:
-                token_ids = token_ids[tf.newaxis, :]
-                padding_mask = padding_mask[tf.newaxis, :]
 
-            x = {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            }
-            initial_output, cache = self.build_initial_cache(x, max_length)
-            next_token_probability = self._get_token_probability_with_cache
-        else:
-            next_token_probability = self._get_token_probability
+        prompt = self.preprocessor.tokenizer(prompt)
+        batch_size = 1 if prompt.shape.rank == 1 else prompt.shape.as_list()[0]
         generated = sampler(
-            self.preprocessor.tokenizer(prompt),
-            next_token_probability,
+            prompt,
+            self._generate_next_token,
             max_length=max_length,
-            end_token_id=end_token_id,
-            cache=cache,
-            token_probs=initial_output,
+            end_token_id=self.preprocessor.tokenizer.end_token_id,
+            cache=self.backbone.build_initial_cache(batch_size),
         )
         return self.preprocessor.tokenizer.detokenize(generated)

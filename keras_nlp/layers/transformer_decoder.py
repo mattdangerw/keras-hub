@@ -212,7 +212,8 @@ class TransformerDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
         current_index=None,
-        cache=None,
+        key_cache=None,
+        value_cache=None,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -276,19 +277,20 @@ class TransformerDecoder(keras.layers.Layer):
         residual = x
         if self.normalize_first:
             x = self._self_attention_layernorm(x)
-        if cache is None:
+        if None in (current_index, key_cache, value_cache):
             x = self._self_attention_layer(
                 query=x,
                 value=x,
                 attention_mask=self_attention_mask,
             )
         else:
-            x, cache = self._self_attention_layer(
+            x, key_cache, value_cache = self._self_attention_layer(
                 query=x,
                 value=x,
-                current_index=current_index,
-                cache=cache,
                 attention_mask=self_attention_mask,
+                current_index=current_index,
+                key_cache=key_cache,
+                value_cache=value_cache,
             )
         x = self._self_attention_dropout(x)
         x = x + residual
@@ -327,9 +329,9 @@ class TransformerDecoder(keras.layers.Layer):
         if not self.normalize_first:
             x = self._feedforward_layernorm(x)
 
-        if cache is None:
+        if None in (current_index, key_cache, value_cache):
             return x
-        return x, cache
+        return x, key_cache, value_cache
 
     def get_config(self):
         config = super().get_config()

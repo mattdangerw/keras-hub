@@ -15,6 +15,7 @@
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -179,18 +180,6 @@ class Sampler:
         prompt = tf.ragged.boolean_mask(prompt, mask)
         return prompt, mask
 
-    def _validate_token_probability_fn(
-        self, token_probability_fn, prompt, mask
-    ):
-        """Helper method to validate `token_probability_fn` output."""
-        test_pred = token_probability_fn(prompt, mask=mask)
-        if len(test_pred.shape) != 3:
-            raise ValueError(
-                "Output of `token_probability_fn` is not a 3D tensor, "
-                "please provide a function with the output shape "
-                "[batch_size, sequence_length, vocab_size]."
-            )
-
     def _pad_prompt(self, prompt, max_length):
         """Pad prompt to `max_length`."""
         mask = tf.ones_like(prompt, dtype=tf.bool)
@@ -227,7 +216,6 @@ class Sampler:
         end_token_id=None,
         from_logits=True,
         cache=None,
-        token_probs=None,
     ):
         prompt, mask = self._validate_prompt_and_mask(prompt, mask)
 
@@ -241,7 +229,6 @@ class Sampler:
         # static shape, which means we cannot concatenate generated token to
         # current prompt.
         prompt, mask = self._pad_prompt(prompt, max_length)
-        self._validate_token_probability_fn(token_probability_fn, prompt, mask)
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
         # , and turn on `jit_compile` accordingly.
@@ -254,7 +241,6 @@ class Sampler:
             mask,
             max_length - shortest_prompt_len,
             cache=cache,
-            token_probs=token_probs,
             from_logits=from_logits,
         )
         # Mask out tokens after `end_token_id`.
@@ -308,11 +294,6 @@ class Sampler:
                 decoding faster by avoiding duplicated computation. See more
                 details in the docstring of
                 `keras_nlp.layers.CachedMultiHeadAttention`.
-            token_probs: a dense float tensor of shape
-                `[batch_size, max_length, vocab_size]`. The next token
-                probability (or logits) of tokens in the prompt. If the
-                prompt is batched, then `token_probs` only has valid values for
-                `[batch_size, shortest_prompt_length, vocab_size]`.
 
         Returns:
             A dense int Tensor, representing the generated text in token id
@@ -321,89 +302,50 @@ class Sampler:
         batch_size, max_length = tf.shape(prompt)[0], tf.shape(prompt)[1]
         num_steps = tf.cast(num_steps, tf.int32)
         max_length = tf.cast(max_length, tf.int32)
-        # The index of the last non-padding token in prompt. Since all sequences
-        # are aligned to the right side, the index is the same for all.
         current_index = max_length - num_steps
 
-        def one_step(
-            current_index,
-            prompt,
-            mask,
-            cache=None,
-            token_probs=None,
-        ):
+        def cond(prompt, mask, cache, current_index):
+            return current_index < max_length
+
+        def body(prompt, mask, cache, current_index, seed_cache=False):
             last_index = current_index - 1
-            if cache is not None:
-                probs, cache = token_probability_fn(
-                    prompt, mask, last_index, cache, token_probs
-                )
+            if seed_cache:
+                current_prompt = prompt[:, 0:current_index]
             else:
-                probs = token_probability_fn(prompt, mask, last_index)
+                current_prompt = prompt[:, last_index:current_index]
 
-            next_token_probs = tf.gather(
-                probs,
-                tf.repeat(current_index - 1, batch_size),
-                axis=1,
-                batch_dims=1,
+            probs, cache = token_probability_fn(
+                current_prompt,
+                mask,
+                cache,
+                last_index,
             )
+
+            next_probs = probs[:, last_index, :]
             if from_logits:
-                next_token_probs = keras.activations.softmax(
-                    next_token_probs, axis=-1
-                )
-            next_token = self.get_next_token(next_token_probs)
-            next_token = tf.cast(next_token, prompt.dtype)
-            next_token = tf.where(
-                mask[:, current_index], prompt[:, current_index], next_token
-            )
-            mask = tf.tensor_scatter_nd_update(
-                tensor=mask,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=tf.repeat(True, batch_size),
-            )
+                next_probs = tf.nn.softmax(next_probs, axis=-1)
 
-            # Append the next token to current sequence.
-            prompt = tf.tensor_scatter_nd_update(
-                tensor=prompt,
-                indices=tf.stack(
-                    (
-                        tf.cast(
-                            tf.range(batch_size), dtype=current_index.dtype
-                        ),
-                        tf.repeat(current_index, batch_size),
-                    ),
-                    axis=1,
-                ),
-                updates=next_token,
+            next_token = self.get_next_token(next_probs)
+            next_token = tf.cast(next_token, prompt.dtype)
+            mask = dynamic_update_slice(
+                mask, tf.repeat(True, batch_size), [0, current_index]
+            )
+            prompt = dynamic_update_slice(
+                prompt, next_token, [0, current_index]
             )
             current_index = tf.add(current_index, 1)
-            if cache is None:
-                return current_index, prompt, mask
             return [current_index, prompt, mask, cache, probs]
 
-        if cache is None:
-            current_index, prompt, mask = tf.while_loop(
-                cond=lambda current_index, prompt, mask: tf.less(
-                    current_index, max_length
-                ),
-                body=one_step,
-                loop_vars=[current_index, prompt, mask],
-            )
-            return prompt, None, None
+        # Run a first iteration of the body to seed the cache.
+        prompt, mask, cache, current_index = body(
+            prompt, mask, cache, current_index, seed_cache=True
+        )
+
         # Run a while loop till `max_length` of tokens has been generated.
-        current_index, prompt, mask, cache, token_probs = tf.while_loop(
-            cond=lambda current_index, prompt, mask, cache, token_probs: tf.less(
-                current_index, max_length
-            ),
-            body=one_step,
-            loop_vars=[current_index, prompt, mask, cache, token_probs],
+        prompt, mask, cache, current_index = tf.while_loop(
+            cond,
+            body,
+            loop_vars=[prompt, mask, cache, current_index],
         )
         return prompt
 
