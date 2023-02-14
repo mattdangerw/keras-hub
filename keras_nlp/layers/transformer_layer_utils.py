@@ -18,21 +18,11 @@ import tensorflow as tf
 from absl import logging
 
 
-def compute_causal_mask(inputs):
-    input_shape = tf.shape(inputs)
-    batch_size, sequence_length = input_shape[0], input_shape[1]
-    i = tf.range(sequence_length)[:, tf.newaxis]
-    j = tf.range(sequence_length)
-    mask = tf.cast(i >= j, dtype="int32")
-    mask = tf.reshape(mask, (1, input_shape[1], input_shape[1]))
-    mult = tf.concat(
-        [
-            tf.expand_dims(batch_size, -1),
-            tf.constant([1, 1], dtype=tf.int32),
-        ],
-        axis=0,
-    )
-    return tf.tile(mask, mult)
+def compute_causal_mask(source_length, dest_length):
+    i = tf.range(dest_length)[:, None]
+    j = tf.range(source_length)
+    mask = i >= j - source_length + dest_length
+    return tf.cast(mask, tf.int32)
 
 
 def merge_padding_and_attention_mask(
@@ -45,9 +35,9 @@ def merge_padding_and_attention_mask(
     Args:
         inputs: the input sequence.
         padding_mask: the 1D padding mask, of shape
-            [batch_size, sequence_length].
+            [batch_size, source_length].
         attention_mask: the 2D customized mask, of shape
-            [batch_size, sequence1_length, sequence2_length].
+            [batch_size, source_length, dest_length].
 
     Return:
         A merged 2D mask or None. If only `padding_mask` is provided, the

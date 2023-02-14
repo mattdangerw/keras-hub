@@ -17,7 +17,6 @@ import copy
 
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 import keras_nlp
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
@@ -201,64 +200,51 @@ class GPT2CausalLM(Task):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
-    def call_with_cache(self, inputs, cache, current_index=None):
-        output, cache = self.backbone.call_with_cache(
-            inputs, cache, current_index
+    def build_cache(self, batch_size, length):
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        shape = (batch_size, num_layers, 2, length, num_heads, head_dim)
+        return tf.zeros(shape)
+
+    def call_with_cache(self, token_ids, padding_mask, cache, cache_index):
+        # Embed tokens.
+        token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
+        # Embed positions at the cache index.
+        position_embedding = self.backbone.get_layer("position_embedding")(
+            token_embedding,
+            start_index=cache_index,
         )
-        output = tf.matmul(
-            output,
+        # Sum and apply dropout to embeddings.
+        x = self.backbone.get_layer("embeddings_sum")(
+            (token_embedding, position_embedding),
+        )
+        x = self.backbone.get_layer("embeddings_dropout")(x)
+        # Apply successive transformer decoder blocks with a cache.
+        layer_cache = tf.unstack(cache, axis=1)
+        for i in range(self.backbone.num_layers):
+            x, new_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
+                x,
+                decoder_padding_mask=padding_mask,
+                cache=layer_cache[i],
+                cache_index=cache_index,
+            )
+            layer_cache[i] = new_cache
+        cache = tf.stack(layer_cache, axis=1)
+        # Final layer norm.
+        x = self.backbone.get_layer("layer_norm")(x)
+        # Language model logits.
+        x = tf.matmul(
+            x,
             self.backbone.token_embedding.embeddings,
             transpose_b=True,
         )
-        return output, cache
-
-    def build_initial_cache(self, x, max_length):
-        output, cache = self.backbone.build_initial_cache(x, max_length)
-        output = tf.matmul(
-            output,
-            self.backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
-        return output, cache
-
-    def _get_token_probability_with_cache(
-        self,
-        prompt,
-        mask,
-        current_index=None,
-        cache=None,
-        existing_outputs=None,
-    ):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        if current_index is None and cache is None:
-            return self(model_inputs)
-        output, cache = self.call_with_cache(
-            model_inputs,
-            cache,
-            current_index,
-        )
-        existing_outputs = dynamic_update_slice(
-            existing_outputs,
-            output,
-            [0, current_index, 0],
-        )
-        return existing_outputs, cache
-
-    def _get_token_probability(self, prompt, mask, current_index=None):
-        model_inputs = {
-            "token_ids": prompt,
-            "padding_mask": mask,
-        }
-        return self(model_inputs)
+        return x, cache
 
     def generate(
         self,
         prompt,
         max_length,
-        use_cache=True,
         sampler="top_k",
     ):
         """Generate text.
@@ -275,37 +261,20 @@ class GPT2CausalLM(Task):
             sampler: a string or `keras_nlp.samplers.Sampler` instance. The
                 sampler to be used for text generation.
         """
-        end_token_id = self.preprocessor.tokenizer.end_token_id
-
         sampler = keras_nlp.samplers.get(sampler)
         if hasattr(self, "jit_compile"):
             # `jit_compile` is a public property as of tf 2.12. hasattr is for
             # backward compat.
             sampler.jit_compile = self.jit_compile
         sampler.run_eagerly = self.run_eagerly
-        initial_output, cache = None, None
-        if use_cache:
-            x, y, sw = self.preprocessor(prompt)
-            token_ids = x["token_ids"]
-            padding_mask = x["padding_mask"]
-            if len(token_ids.shape) == 1:
-                token_ids = token_ids[tf.newaxis, :]
-                padding_mask = padding_mask[tf.newaxis, :]
 
-            x = {
-                "token_ids": token_ids,
-                "padding_mask": padding_mask,
-            }
-            initial_output, cache = self.build_initial_cache(x, max_length)
-            next_token_probability = self._get_token_probability_with_cache
-        else:
-            next_token_probability = self._get_token_probability
+        prompt = self.preprocessor.tokenizer(prompt)
+        batch_size = 1 if prompt.shape.rank == 1 else prompt.shape.as_list()[0]
         generated = sampler(
-            self.preprocessor.tokenizer(prompt),
-            next_token_probability,
+            prompt,
+            self.call_with_cache,
             max_length=max_length,
-            end_token_id=end_token_id,
-            cache=cache,
-            token_probs=initial_output,
+            end_token_id=self.preprocessor.tokenizer.end_token_id,
+            cache=self.build_cache(batch_size, max_length),
         )
         return self.preprocessor.tokenizer.detokenize(generated)
