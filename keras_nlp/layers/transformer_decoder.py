@@ -212,7 +212,7 @@ class TransformerDecoder(keras.layers.Layer):
         encoder_padding_mask=None,
         encoder_attention_mask=None,
         cache=None,
-        cache_index=None,
+        cache_index=0,
     ):
         """Forward pass of the TransformerDecoder.
 
@@ -236,8 +236,7 @@ class TransformerDecoder(keras.layers.Layer):
                 tokens. `cache` is of shape [B, 2, max_seq_len, num_heads,
                 key_dims].
             cache_index: a int or int Tensor, the index of the current token
-                being processed. If `cache_index=None` while `cache` is set, it
-                means it's the first pass to build the cache.
+                being processed.
         Returns:
             x: A Tensor of the same shape as the `decoder_sequence`.
             cache: [Optional], a dense float Tensor. The updated `cache`.
@@ -272,7 +271,15 @@ class TransformerDecoder(keras.layers.Layer):
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
-        self_attention_mask = compute_causal_mask(decoder_sequence)
+        batch_size = tf.shape(decoder_sequence)[0]
+        input_length = output_length = tf.shape(decoder_sequence)[1]
+        # When doing cached decoding, our attention mask is as long as the cache
+        # and the causal part is offset by our cache_index.
+        if cache is not None:
+            input_length = tf.shape(cache)[2]
+        self_attention_mask = compute_causal_mask(
+            batch_size, input_length, output_length, cache_index,
+        )
         decoder_mask = merge_padding_and_attention_mask(
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )

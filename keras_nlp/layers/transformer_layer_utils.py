@@ -18,21 +18,11 @@ import tensorflow as tf
 from absl import logging
 
 
-def compute_causal_mask(inputs):
-    input_shape = tf.shape(inputs)
-    batch_size, sequence_length = input_shape[0], input_shape[1]
-    i = tf.range(sequence_length)[:, tf.newaxis]
-    j = tf.range(sequence_length)
-    mask = tf.cast(i >= j, dtype="int32")
-    mask = tf.reshape(mask, (1, input_shape[1], input_shape[1]))
-    mult = tf.concat(
-        [
-            tf.expand_dims(batch_size, -1),
-            tf.constant([1, 1], dtype=tf.int32),
-        ],
-        axis=0,
-    )
-    return tf.tile(mask, mult)
+def compute_causal_mask(batch_size, input_length, output_length, cache_index):
+    i = tf.range(output_length)[:, tf.newaxis] + cache_index
+    j = tf.range(input_length)
+    mask = tf.cast(i >= j, dtype="int32")[tf.newaxis, :, :]
+    return tf.broadcast_to(mask, (batch_size, output_length, input_length))
 
 
 def merge_padding_and_attention_mask(
