@@ -188,6 +188,7 @@ class GPT2CausalLM(Task):
 
         self.backbone = backbone
         self.preprocessor = preprocessor
+        self._sampler = None
 
     @classproperty
     def presets(cls):
@@ -361,19 +362,21 @@ class GPT2CausalLM(Task):
             )
         end_token_id = self.preprocessor.tokenizer.end_token_id
 
-        sampler = keras_nlp.samplers.get(sampler)
-        if hasattr(self, "jit_compile"):
-            # `jit_compile` is a public property as of tf 2.12. hasattr is for
-            # backward compat.
-            sampler.jit_compile = self.jit_compile
-        sampler.run_eagerly = self.run_eagerly
+        if self._sampler is None:
+            self._sampler = keras_nlp.samplers.get(sampler)
+            if hasattr(self, "jit_compile"):
+                # `jit_compile` is a public property as of tf 2.12. hasattr is for
+                # backward compat.
+                self._sampler.jit_compile = self.jit_compile
+            self._sampler.run_eagerly = self.run_eagerly
+
         x, _, _ = self.preprocessor(prompt)
         if len(x["token_ids"].shape) == 1:
             x["token_ids"] = x["token_ids"][tf.newaxis, :]
             x["padding_mask"] = x["padding_mask"][tf.newaxis, :]
         _, cache = self.build_initial_cache(x, max_length)
         next_token_probability = self._get_token_probability
-        generated = sampler(
+        generated = self._sampler(
             self.preprocessor.tokenizer(prompt),
             next_token_probability,
             max_length=max_length,

@@ -148,6 +148,8 @@ class Sampler:
             )
         self.jit_compile = jit_compile
         self.run_eagerly = run_eagerly
+        self._sample_fn = None
+        self._token_probability_fn = None
 
     def _validate_prompt_and_mask(self, prompt, mask):
         """Helper method to validate input prompt."""
@@ -241,12 +243,13 @@ class Sampler:
 
         # Convert `sample` method to a `tf.function` if `self.run_eagerly=False`
         # , and turn on `jit_compile` accordingly.
-        sample = self.sample
-        if not self.run_eagerly:
-            sample = tf.function(self.sample, jit_compile=self.jit_compile)
-        prompt = sample(
+        if self._sample_fn is None:
+            self._sample_fn = self.sample
+            if not self.run_eagerly:
+                self._sample_fn = tf.function(self.sample, jit_compile=self.jit_compile)
+            self._token_probability_fn = token_probability_fn
+        prompt = self._sample_fn(
             prompt,
-            token_probability_fn,
             mask,
             max_length - shortest_prompt_len,
             cache=cache,
@@ -278,7 +281,6 @@ class Sampler:
     def sample(
         self,
         prompt,
-        token_probability_fn,
         mask,
         num_steps,
         from_logits=True,
@@ -321,7 +323,7 @@ class Sampler:
         ):
             last_index = current_index - 1
             if cache is not None:
-                probs, cache = token_probability_fn(
+                probs, cache = self._token_probability_fn(
                     prompt,
                     mask,
                     cache=cache,
@@ -329,7 +331,7 @@ class Sampler:
                 )
                 next_token_probs = tf.squeeze(probs, axis=1)
             else:
-                probs = token_probability_fn(prompt, mask)
+                probs = self._token_probability_fn(prompt, mask)
                 next_token_probs = tf.gather(
                     probs,
                     tf.repeat(current_index - 1, batch_size),
