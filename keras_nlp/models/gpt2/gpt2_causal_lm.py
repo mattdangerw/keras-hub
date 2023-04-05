@@ -291,23 +291,22 @@ class GPT2CausalLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        def generate_function(prompt, input_mask, min_length):
+        def generate_function(prompt, mask, start_index):
             # Create and seed cache with a single forward pass.
             cache = self._build_cache(prompt)
 
             def next(prompt, state, index):
                 # The cache index is the index of our previous token.
-                cache_index = index - 1
-                prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
-                logits, state = self.call_with_cache(prompt, state, cache_index)
+                prompt = tf.slice(prompt, [0, index], [-1, 1])
+                logits, state = self.call_with_cache(prompt, state, index)
                 return tf.squeeze(logits, axis=1), state
 
             return self._sampler(
                 next=next,
                 prompt=prompt,
                 state=cache,
-                index=min_length,
-                mask=input_mask,
+                index=start_index,
+                mask=mask,
                 end_token_id=self.preprocessor.tokenizer.end_token_id,
             )
 
@@ -355,17 +354,19 @@ class GPT2CausalLM(Task):
 
         # Pad ragged to dense tensors.
         padded_shape = (None, max_length)
-        min_length = tf.reduce_min(prompt.row_lengths())
-        input_mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
+        start_index = tf.reduce_min(prompt.row_lengths()) - 1
+        if start_index == 0:
+            raise ValueError("All prompts must have at least one input token.")
+        mask = tf.ones_like(prompt, tf.bool).to_tensor(shape=padded_shape)
         prompt = prompt.to_tensor(shape=padded_shape)
 
         # Run the (possibly compiled) generate function on dense inputs.
         generate_function = self.make_generate_function()
-        output = generate_function(prompt, input_mask, min_length)
+        output = generate_function(prompt, mask, start_index)
 
         # Truncate to ragged by removing tokens after the first end token.
         end_token_id = self.preprocessor.tokenizer.end_token_id
-        output = truncate_at_token(output, end_token_id, input_mask)
+        output = truncate_at_token(output, end_token_id, mask)
 
         # Detokenize.
         output = self.preprocessor.tokenizer.detokenize(output)

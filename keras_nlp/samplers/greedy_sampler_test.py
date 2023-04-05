@@ -32,7 +32,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         def next(prompt, state, index):
             # Return a distribution favoring the next char in state.
-            logits = tf.one_hot(state[:, index], self.vocab_size) * 1e9
+            logits = tf.one_hot(state[:, index + 1], self.vocab_size) * 1e9
             return logits, state
 
         self.next = next
@@ -48,18 +48,18 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             logits[:, 0] = 1e9
             return tf.constant(logits), state
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["s"])
         output = self.sampler(
             next=next,
             prompt=prompt,
-            index=5,
+            index=4,
         )
-        self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaa"])
+        self.assertEqual(self.join_as_string(output), ["sssssaaaaaaa"])
 
     def test_stateful_call(self):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["s"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
@@ -70,14 +70,14 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_early_stopping(self):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["s"])
         output = self.sampler(
             next=self.next,
             prompt=prompt,
             state=state,
             end_token_id=self.char_lookup["t"],
         )
-        self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
+        self.assertEqual(self.join_as_string(output), ["sequentsssss"])
 
     def test_is_greedy(self):
         def next(prompt, state, index):
@@ -86,12 +86,12 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             logits = tf.repeat(logits[tf.newaxis, :], self.batch_size, axis=0)
             return logits, state
 
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["s"])
         output = self.sampler(
             next=next,
             prompt=prompt,
         )
-        output_ids = set(output[0].numpy())
+        output_ids = set(output[0][1:].numpy())
         self.assertContainsSubset(output_ids, [0])
 
     @parameterized.named_parameters(
@@ -100,7 +100,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
     def test_compilation(self, jit_compile):
         state_chars = list("sequentially")
         state = tf.constant([[self.char_lookup[c] for c in state_chars]])
-        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["z"])
+        prompt = tf.fill((self.batch_size, self.length), self.char_lookup["s"])
 
         @tf.function(jit_compile=jit_compile)
         def generate(prompt, state):

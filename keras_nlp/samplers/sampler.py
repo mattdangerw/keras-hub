@@ -110,6 +110,7 @@ class Sampler:
             # Compute the softmax distribution for the next token.
             logits, state = next(prompt, state, index)
             probabilities = keras.activations.softmax(logits)
+            next_index = index + 1
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
@@ -117,18 +118,22 @@ class Sampler:
             # Ensure shape is `[None]`, otherwise it causes issues after
             # converting to TFLite.
             next_token = tf.ensure_shape(next_token, [None])
-            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            next_token = tf.where(
+                mask[:, next_index],
+                prompt[:, next_index],
+                next_token,
+            )
             # Update the prompt with the next token.
             next_token = next_token[:, tf.newaxis]
-            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            prompt = dynamic_update_slice(prompt, next_token, [0, next_index])
             # Return the next prompt, state and incremented index.
-            return (prompt, state, index + 1)
+            return (prompt, state, next_index)
 
         prompt, _, _ = tf.while_loop(
             cond=cond,
             body=body,
             loop_vars=(prompt, state, index),
-            maximum_iterations=(max_length - index),
+            maximum_iterations=(max_length - index - 1),
         )
         return prompt
 
