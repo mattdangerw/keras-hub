@@ -14,23 +14,32 @@
 
 """GPT2 Causal LM preprocessor layer."""
 
+import tensorflow as tf
 from absl import logging
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.gpt2.gpt2_preprocessor import GPT2Preprocessor
+from keras_nlp.utils.keras_utils import (
+    convert_inputs_to_list_of_tensor_segments,
+)
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
+from keras_nlp.utils.tf_utils import tensor_to_string_list
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CausalLMPreprocessor")
 class GPT2CausalLMPreprocessor(GPT2Preprocessor):
-    """GPT2 Causal LM preprocessor.
+    """Preprocessor for `keras_nlp.models.GPT2CausalLM`.
 
-    This preprocessing layer is primarily meant to be used with
-    `keras_nlp.models.GPT2CausalLM`. By default, it will take in batches of
-    strings, and return outputs in a `(x, y, sample_weight)` format, where the
-    `y` label is the next token id in the `x` sequence. For use with generation,
-    pass `return_labels=False` in which case the output will simply be the
-    encoded string features.
+    This preprocessing layer is meant for use with
+    `keras_nlp.models.GPT2CausalLM`. It has three different modes of operation:
+
+    1. `"training"`: Where a string input is tokenized and split into features
+        and labels.
+    2. `"generate_preprocessing"`: Where a string input is tokenized and
+        packed for a `generate()` call.
+    3. `"generate_postprocessing"`: Where a token id output is masked and
+        detokenized after `generate()` has completed sampling new token ids.
+
 
     Args:
         tokenizer: A `keras_nlp.models.GPT2Tokenizer` instance.
@@ -39,6 +48,12 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
             start token to each input sequence.
         add_end_token: If true, the preprocessor will append the tokenizer
             end token to each input sequence.
+        add_end_token_for_generate: If true, the preprocessor will also
+            append an end token during generation.
+        output_strings: If true, all tensors will be converted to python
+            string types during generation postprocessing.
+        output_special_tokens: If true, all special tokens will be preserved
+            in the output during generation postprocessing.
 
     Call arguments:
         x: A string `tf.Tensor` or list of python strings.
@@ -47,12 +62,8 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
             generates label weights.
         sequence_length: Pass to override the configured `sequence_length` of
             the layer.
-        add_start_token: Pass to override the configured value of
-            `add_start_token` on the layer.
-        add_end_token: Pass to override the configured value of
-            `add_end_token` on the layer.
-        return_labels: If `True`, the output `"token_ids"` will be offset by one
-            and returned as labels. If `False` only features will be returned.
+        mode: The mode of operation for the layer. One of `"training"`,
+            `"generate_preprocessing"` or `"generate_postprocessing'`.
 
     Examples:
     ```python
@@ -89,15 +100,35 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
     ds = ds.map(preprocessor, num_parallel_calls=tf.data.AUTOTUNE)
     """
 
+    def __init__(
+        self,
+        tokenizer,
+        sequence_length=1024,
+        add_start_token=True,
+        add_end_token=True,
+        add_end_token_for_generate=False,
+        output_strings=True,
+        output_special_tokens=False,
+        **kwargs,
+    ):
+        super().__init__(
+            tokenizer,
+            sequence_length=sequence_length,
+            add_start_token=add_start_token,
+            add_end_token=add_end_token,
+            **kwargs,
+        )
+        self.add_end_token_for_generate = add_end_token_for_generate
+        self.output_strings = output_strings
+        self.output_special_tokens = output_special_tokens
+
     def call(
         self,
         x,
         y=None,
         sample_weight=None,
+        mode="train",
         sequence_length=None,
-        add_start_token=None,
-        add_end_token=None,
-        return_labels=True,
     ):
         if y is not None or sample_weight is not None:
             logging.warning(
@@ -106,25 +137,56 @@ class GPT2CausalLMPreprocessor(GPT2Preprocessor):
                 "or `sample_weight`. Your `y` and `sample_weight` will be "
                 "ignored."
             )
-        if return_labels:
-            # Tokenize with one extra token to account for the truncation below.
-            sequence_length = (sequence_length or self.sequence_length) + 1
-        x = super().call(
-            x,
-            sequence_length=sequence_length,
-            add_start_token=add_start_token,
-            add_end_token=add_end_token,
-        )
-        if return_labels:
-            token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+        sequence_length = sequence_length or self.sequence_length
+
+        if mode == "train":
+            x = convert_inputs_to_list_of_tensor_segments(x)[0]
+            # Truncate with one extra token to account for the truncation below.
+            token_ids, padding_mask = self.packer(
+                self.tokenizer(x),
+                sequence_length=sequence_length + 1,
+            )
             # The last token does not have a next token, so we truncate it out.
             x = {
                 "token_ids": token_ids[..., :-1],
                 "padding_mask": padding_mask[..., :-1],
             }
             # Target `y` will be the next token.
-            y = token_ids[..., 1:]
-            sample_weight = padding_mask[..., 1:]
+            y, sample_weight = token_ids[..., 1:], padding_mask[..., 1:]
             return pack_x_y_sample_weight(x, y, sample_weight)
+        elif mode == "generate_preprocess":
+            x = convert_inputs_to_list_of_tensor_segments(x)[0]
+            token_ids, padding_mask = self.packer(
+                self.tokenizer(x),
+                sequence_length=sequence_length,
+                add_end_value=self.add_end_token_for_generate,
+            )
+            return {
+                "token_ids": token_ids,
+                "padding_mask": padding_mask,
+            }
+        elif mode == "generate_postprocess":
+            token_ids, padding_mask = x["token_ids"], x["padding_mask"]
+            mask = padding_mask
+            if not self.output_special_tokens:
+                mask = mask & (token_ids != self.tokenizer.end_token_id)
+            token_ids = tf.ragged.boolean_mask(token_ids, mask)
+            outputs = self.tokenizer.detokenize(token_ids)
+            if self.output_strings:
+                outputs = tensor_to_string_list(outputs)
+            return outputs
         else:
-            return x
+            raise ValueError(
+                f"Unknown preprocessing mode. Received `mode={mode}`"
+            )
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "add_end_token_for_generate": self.add_end_token_for_generate,
+                "output_special_tokens": self.output_special_tokens,
+                "output_strings": self.output_strings,
+            }
+        )
+        return config
