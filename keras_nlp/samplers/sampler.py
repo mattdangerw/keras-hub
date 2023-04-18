@@ -32,7 +32,9 @@ call_args_docstring = """
     cache: Optional. A tensor or nested structure of tensors that will be
         updated by each call to `next`. This can be used to cache computations
         from early iterations of the generative loop.
-    index: Optional. The first index to start sampling at.
+    index: Optional. The index of the first token to prompt the model with. E.g.
+        a starting index of 0, means that the model should take in the `prompt`
+        at token 0, and return prediction logits for token 1.
     mask: Optional. A 2D integer tensor with the same shape as `prompt`.
         Locations which are `True` in the mask are never updated during
         sampling. Often this will mark all ids in `prompt` which were present in
@@ -127,6 +129,7 @@ class Sampler:
             # Compute the softmax distribution for the next token.
             logits, _, cache = next(prompt, cache, index)
             probabilities = keras.activations.softmax(logits / self.temperature)
+            next_index = index + 1
             # Compute the next token.
             next_token = self.get_next_token(probabilities)
             # Don't overwrite anywhere mask is True.
@@ -134,26 +137,32 @@ class Sampler:
             # Ensure shape is `[None]`, otherwise it causes issues after
             # converting to TFLite.
             next_token = tf.ensure_shape(next_token, [None])
-            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            next_token = tf.where(
+                mask[:, next_index],
+                prompt[:, next_index],
+                next_token,
+            )
             # Update the prompt with the next token.
             next_token = next_token[:, tf.newaxis]
-            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            prompt = dynamic_update_slice(prompt, next_token, [0, next_index])
             # Return the next prompt, cache and incremented index.
-            return (prompt, cache, index + 1)
+            return (prompt, cache, next_index)
 
         prompt, _, _ = tf.while_loop(
             cond=cond,
             body=body,
             loop_vars=(prompt, cache, index),
-            maximum_iterations=(max_length - index),
+            maximum_iterations=(max_length - index - 1),
         )
         return prompt
 
     def get_next_token(self, probabilities):
         """Get the next token.
+
         Args:
-            probabilities: a Tensor, the probability distribution for next
+            probabilities: a `tf.Tensor`, the probability distribution for next
                 token over all vocab tokens.
+
         Get the next token based on given probability distribution over tokens.
         Subclasses must implement this method.
         """
@@ -164,4 +173,6 @@ class Sampler:
         return cls(**config)
 
     def get_config(self):
-        return {"temperature": self.temperature}
+        return {
+            "temperature": self.temperature,
+        }

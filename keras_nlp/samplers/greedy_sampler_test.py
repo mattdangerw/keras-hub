@@ -33,7 +33,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             # Dummy hidden states.
             hidden_states = tf.ones([self.batch_size, 5])
             # Return a distribution favoring the next char in cache.
-            logits = tf.one_hot(cache[:, index], self.vocab_size) * 1e9
+            logits = tf.one_hot(cache[:, index + 1], self.vocab_size) * 1e9
             return logits, hidden_states, cache
 
         self.next = next
@@ -60,7 +60,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.sampler(
             next=next,
             prompt=prompt,
-            index=5,
+            index=4,
         )
         self.assertEqual(self.join_as_string(output), ["zzzzzaaaaaaa"])
 
@@ -72,6 +72,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             next=self.next,
             prompt=prompt,
             cache=cache,
+            index=-1,
         )
         self.assertEqual(self.join_as_string(output), ["sequentially"])
 
@@ -83,6 +84,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
             next=self.next,
             prompt=prompt,
             cache=cache,
+            index=-1,
             end_token_id=self.char_lookup["t"],
         )
         self.assertEqual(self.join_as_string(output), ["sequentzzzzz"])
@@ -100,6 +102,7 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
         output = self.sampler(
             next=next,
             prompt=prompt,
+            index=-1,
         )
         output_ids = set(output[0].numpy())
         self.assertContainsSubset(output_ids, [0])
@@ -114,7 +117,12 @@ class GreedySamplerTest(tf.test.TestCase, parameterized.TestCase):
 
         @tf.function(jit_compile=jit_compile)
         def generate(prompt, cache):
-            return self.sampler(self.next, prompt=prompt, cache=cache)
+            return self.sampler(
+                self.next,
+                prompt=prompt,
+                cache=cache,
+                index=-1,
+            )
 
         output = generate(prompt, cache)
         self.assertEqual(self.join_as_string(output), ["sequentially"])

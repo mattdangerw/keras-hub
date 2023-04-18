@@ -158,6 +158,7 @@ class BeamSampler(Sampler):
             logits, _, cache = next(prompt, cache, index)
             vocab_size = tf.shape(logits)[-1]
             probs = keras.activations.softmax(logits / self.temperature)
+            next_index = index + 1
 
             # Compute the running log-likelihood of each new candidate.
             next_log_probs = tf.math.log(probs) + log_probs[..., tf.newaxis]
@@ -188,18 +189,22 @@ class BeamSampler(Sampler):
             # Update each beam with the next token.
             next_token = tf.cast(next_token, prompt.dtype)
             # Don't overwrite anywhere mask is True.
-            next_token = tf.where(mask[:, index], prompt[:, index], next_token)
+            next_token = tf.where(
+                mask[:, next_index],
+                prompt[:, next_index],
+                next_token,
+            )
             # Update the prompt with the next token.
             next_token = next_token[:, tf.newaxis]
-            prompt = dynamic_update_slice(prompt, next_token, [0, index])
+            prompt = dynamic_update_slice(prompt, next_token, [0, next_index])
             # Return the iteration of the loop state.
-            return (prompt, cache, index + 1, log_probs)
+            return (prompt, cache, next_index, log_probs)
 
         prompt, _, _, log_probs = tf.while_loop(
             cond=cond,
             body=body,
             loop_vars=(prompt, cache, index, log_probs),
-            maximum_iterations=(max_length - index),
+            maximum_iterations=(max_length - index - 1),
         )
 
         all_prompts = unflatten_beams(prompt)

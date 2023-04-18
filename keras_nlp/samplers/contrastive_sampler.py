@@ -118,8 +118,10 @@ class ContrastiveSampler(Sampler):
             return tf.reshape(x, shape=unflat_shape)
 
         mask = tf.zeros_like(prompt, dtype=tf.bool) if mask is None else mask
-        # Compute initial logits.
+        # Feed in the first token index outside the loop.
+        # Logits will be handle in the beginning of the loop body.
         logits, _, cache = next(prompt, cache, index)
+        index = index + 1
         # `tf.while_loop` will not accept `None` as a value for `loop_vars`.
         cache = () if cache is None else cache
 
@@ -150,10 +152,12 @@ class ContrastiveSampler(Sampler):
             next_token = flatten_beams(top_k_indices)
             next_token = tf.cast(next_token, prompt.dtype)
             next_token = tf.where(
-                mask_beams[:, index], prompt_beams[:, index], next_token
+                mask_beams[:, index],
+                prompt_beams[:, index],
+                next_token,
             )
 
-            # Update the prompt with the next token.
+            # Update the prompt with the next top-k tokens.
             next_token = next_token[:, tf.newaxis]
             prompt_beams = dynamic_update_slice(
                 prompt_beams, next_token, [0, index]
@@ -161,8 +165,9 @@ class ContrastiveSampler(Sampler):
 
             # Compute the logits and hidden states for top-k candidate tokens.
             next_logits, next_hidden_states_beams, cache_beams = next(
-                prompt_beams, cache_beams, index + 1
+                prompt_beams, cache_beams, index
             )
+            next_index = index + 1
 
             # Compute the max similarity score for top-k candidate tokens
             # against previous tokens.
@@ -173,10 +178,6 @@ class ContrastiveSampler(Sampler):
                 tf.reduce_max(similarity_scores[:, :index], axis=1),
                 dtype=next_token_probabilities.dtype,
             )
-            if index == 0:
-                # If the index is 0, there is no previous states so we set
-                # `max_similarity_scores` the same for all beams.
-                max_similarity_scores = tf.zeros_like(max_similarity_scores)
             # The final score of each candidate token is weighted sum of
             # probability and similarity against previous tokens.
             accumulated_scores = (
@@ -210,12 +211,13 @@ class ContrastiveSampler(Sampler):
             next_hidden_states = gather_best_token(unflat_next_hidden_states)
             cache = tf.nest.map_structure(gather_best_token, unflat_cache)
 
+            # Update hidden states at the index we just "fed in" to a model.
             hidden_states = dynamic_update_slice(
                 hidden_states,
                 next_hidden_states[:, tf.newaxis, :],
                 [0, index, 0],
             )
-            return (prompt, cache, index + 1, logits, hidden_states)
+            return (prompt, cache, next_index, logits, hidden_states)
 
         prompt, _, _, _, _ = tf.while_loop(
             cond=cond,

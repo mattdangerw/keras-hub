@@ -333,23 +333,18 @@ class GPT2CausalLM(Task):
         row_lengths = tf.math.reduce_sum(
             tf.cast(padding_mask, tf.int32), axis=-1
         )
-        # Start at the first index that has no user inputted id.
-        index = tf.math.reduce_min(row_lengths)
+        # Start at the earliest index of the final token in a prompt.
+        index = tf.math.reduce_min(row_lengths) - 1
 
         def next(prompt, cache, index):
-            # The cache index is the index of our previous token.
-            cache_index = index - 1
-            prompt = tf.slice(prompt, [0, cache_index], [-1, 1])
+            # Only feed the latest token in (the rest is cached).
+            prompt = tf.slice(prompt, [0, index], [-1, 1])
             logits, hidden_states, cache = self.call_with_cache(
-                prompt,
-                cache,
-                cache_index,
+                prompt, cache, index
             )
-            return (
-                tf.squeeze(logits, axis=1),
-                tf.squeeze(hidden_states, axis=1),
-                cache,
-            )
+            logits = tf.squeeze(logits, axis=1)
+            hidden_states = tf.squeeze(hidden_states, axis=1)
+            return logits, hidden_states, cache
 
         return self._sampler(
             next=next,
@@ -357,8 +352,8 @@ class GPT2CausalLM(Task):
             cache=cache,
             index=index,
             mask=padding_mask,
-            end_token_id=end_token_id,
             hidden_states=hidden_states,
+            end_token_id=end_token_id,
         )
 
     def generate(
