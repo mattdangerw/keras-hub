@@ -29,7 +29,6 @@ from keras_nlp.samplers.serialization import get as get_sampler
 from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tf_utils import tensor_to_string_list
-from keras_nlp.utils.tf_utils import truncate_at_token
 
 
 @keras_nlp_export("keras_nlp.models.OPTCausalLM")
@@ -300,8 +299,7 @@ class OPTCausalLM(Task):
 
     def generate_step(
         self,
-        token_ids,
-        padding_mask,
+        inputs,
         end_token_id=None,
     ):
         """A compilable generation function for a single batch of inputs.
@@ -312,16 +310,13 @@ class OPTCausalLM(Task):
         preprocessing. This function is wrapped by the `generate()` method.
 
         Args:
-            token_ids: A dense int Tensor, with shape
-                `(batch_size, max_length)`. The user provided token ids
-                padded to `max_length`.
-            padding_mask: A dense boolean Tensor, with the same shape as
-                `token_ids`. Positions that are True in the `padding_mask`
-                are assumed to be user input and never updated.
+            inputs: A dictionary with two batched tensor keys `"token_ids"`
+                and `"padding_mask"`.
             end_token_id: The id of the end token to stop on. If all
                 sequences have produced a new `end_token_id`, generation
                 will stop.
         """
+        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Create and seed cache with a single forward pass.
         hidden_states, cache = self._build_cache(token_ids)
         # Compute the lengths of all user inputted tokens ids.
@@ -346,7 +341,7 @@ class OPTCausalLM(Task):
                 cache,
             )
 
-        return self._sampler(
+        token_ids = self._sampler(
             next=next,
             prompt=token_ids,
             cache=cache,
@@ -355,6 +350,57 @@ class OPTCausalLM(Task):
             end_token_id=end_token_id,
             hidden_states=hidden_states,
         )
+
+        # Compute an output padding mask with the token ids we updated.
+        if end_token_id is not None:
+            end_locations = (token_ids == end_token_id) & (~padding_mask)
+            end_locations = tf.cast(end_locations, tf.int32)
+            overflow = tf.math.cumsum(end_locations, exclusive=True)
+            padding_mask = ~tf.cast(overflow, tf.bool)
+        else:
+            padding_mask = tf.ones_like(token_ids, dtype=tf.bool)
+        return {
+            "token_ids": token_ids,
+            "padding_mask": padding_mask,
+        }
+
+    def _normalize_inputs(
+        self,
+        inputs,
+    ):
+        input_is_scalar = False
+
+        if isinstance(inputs, tf.data.Dataset):
+            return inputs, input_is_scalar
+
+        if isinstance(inputs, str) or isinstance(inputs, list):
+            inputs = tf.convert_to_tensor(inputs)
+
+        if isinstance(inputs, tf.Tensor) and inputs.shape.rank == 0:
+            input_is_scalar = True
+            inputs = inputs[tf.newaxis]
+
+        return [inputs], input_is_scalar
+
+    def _normalize_outputs(
+        self,
+        outputs,
+        input_is_scalar,
+    ):
+        def normalize(x):
+            x = tf.concat(x, axis=0)
+            x = tf.squeeze(x, 0) if input_is_scalar else x
+            is_string = x.dtype == tf.string
+            # Convert outputs to a friendly pythonic type. For numerical outputs
+            # that is numpy, for string outputs that is `list` and `str`.
+            return tensor_to_string_list(x) if is_string else x.numpy()
+
+        if isinstance(outputs[0], dict):
+            return {
+                "token_ids": normalize([x["token_ids"] for x in outputs]),
+                "padding_mask": normalize([x["padding_mask"] for x in outputs]),
+            }
+        return normalize([x for x in outputs])
 
     def generate(
         self,
@@ -366,14 +412,14 @@ class OPTCausalLM(Task):
         This method generates text based on given `inputs`. The sampling method
         used for generation can be set in the `compile` method.
 
-        If `inputs` is a `tf.data.Dataset`, outputs will be generated
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
         "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
         as a single batch.
 
         If a `preprocessor` is attached to the model, `inputs` should be
         strings and returned sequences will be strings. Otherwise, inputs should
-        be preprocessed into token ids before calling `generate()`, and returned
-        sequences will also be token ids.
+        be preprocessed before calling `generate()`, and returned sequences will
+        be token ids.
 
         Args:
             inputs: a string `tf.Tensor`, a `tf.data.Dataset` of strings, a
@@ -382,70 +428,48 @@ class OPTCausalLM(Task):
                 `tf.Tensor` or `tf.data.Dataset` with keys `"token_ids"` and
                 `"padding_mask"`.
             max_length: Optional. int. The max length of the generated sequence.
-                Will default to the configured `sequence_length` of the
+                Will default to the max configured `sequence_length` of the
                 `preprocessor`. If `preprocessor` is `None`, `inputs` should be
-                padded to the desired max length and this argument is ignored.
+                should be padded to the desired maximum length and this argument
+                will be ignored.
 
         Returns:
             A string or string list if `preprocessor` is set, and a integer
-            tensor of token ids if `preprocessor is None`.
+            tensor of token IDs if `preprocessor is None`.
         """
-        input_is_scalar = False
+        # Setup our three main passes.
+        # 1. Optionally preprocessing strings to dense integer tensors.
+        # 2. Generate new tokens via a compiled function on dense tensors.
+        # 3. Optionally postprocess dense integer tensors back to string.
+        generate_function = self.make_generate_function()
+        end_token_id = None
+        if self.preprocessor is not None:
+            end_token_id = self.preprocessor.tokenizer.end_token_id
+
+        def preprocess(x):
+            return self.preprocessor.generate_preprocess(
+                x, sequence_length=max_length
+            )
+
+        def generate(x):
+            return generate_function(x, end_token_id=end_token_id)
+
+        def postprocess(x):
+            return self.preprocessor.generate_postprocess(x)
+
+        # Normalize inputs, apply our three passes, and normalize outputs.
+        inputs, input_is_scalar = self._normalize_inputs(inputs)
 
         if self.preprocessor is not None:
-
-            def preprocess(x):
-                return self.preprocessor(
-                    x,
-                    sequence_length=max_length,
-                    return_labels=False,
-                    # We do not append an end token by default during
-                    # generation, as generating directly in the same sequence is
-                    # the most common workflow. If an end token directly after
-                    # a prompt is desired, it can be added to the prompt string.
-                    add_end_token=False,
-                )
-
-            if not isinstance(inputs, tf.data.Dataset):
-                inputs = tf.convert_to_tensor(inputs)
-                input_is_scalar = inputs.shape.rank == 0
-                inputs = inputs[tf.newaxis] if input_is_scalar else inputs
-                # Wrap a list to avoid the overhead of converting to dataset.
-                inputs = [preprocess(inputs)]
-            else:
+            if isinstance(inputs, tf.data.Dataset):
                 inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
                 inputs = inputs.prefetch(tf.data.AUTOTUNE)
-        else:
-            if not isinstance(inputs, tf.data.Dataset):
-                # Wrap a list to avoid the overhead of converting to dataset.
-                inputs = [inputs]
+            else:
+                inputs = [preprocess(x) for x in inputs]
 
-        generate_function = self.make_generate_function()
-        outputs = []
-        for batch in inputs:
-            token_ids, padding_mask = batch["token_ids"], batch["padding_mask"]
-            # If `preprocessor` is attached, we can stop after `end_token_id``.
-            end_token_id = None
-            if self.preprocessor is not None:
-                end_token_id = self.preprocessor.tokenizer.end_token_id
-            # Run the compiled generate function.
-            output = generate_function(token_ids, padding_mask, end_token_id)
+        outputs = [generate(x) for x in inputs]
 
-            if self.preprocessor is not None:
-                # Truncate to ragged by removing tokens after the first
-                # generated `end_token_id`.
-                output = truncate_at_token(output, end_token_id, padding_mask)
-                # Strip start token if added.
-                if self.preprocessor.add_start_token:
-                    output = output[:, 1:]
-                # Detokenize.
-                output = self.preprocessor.tokenizer.detokenize(output)
-            outputs.append(output)
+        if self.preprocessor is not None:
+            outputs = [postprocess(x) for x in outputs]
 
-        outputs = tf.concat(outputs, axis=0)
-        outputs = tf.squeeze(outputs, 0) if input_is_scalar else outputs
-        # Convert outputs to a friendly pythonic type. For numerical outputs
-        # that is numpy, for string outputs that is `list` and `str`.
-        if outputs.dtype == tf.string:
-            return tensor_to_string_list(outputs)
-        return outputs.numpy()
+        return self._normalize_outputs(outputs, input_is_scalar)
