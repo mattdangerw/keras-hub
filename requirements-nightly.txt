@@ -1,6 +1,6 @@
 # Core deps.
-tf-nightly
-tensorflow-text-nightly
+tf-nightly==2.13.0.dev20230420
+tensorflow-text-nightly==2.13.0.dev20230420
 tfds-nightly
 
 # Common deps.
