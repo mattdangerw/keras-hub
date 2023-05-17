@@ -17,8 +17,11 @@
 import functools
 import math
 
+import keras_core as keras
 import tensorflow as tf
-from tensorflow import keras
+from keras_core.trainers.data_adapters.data_adapter_utils import (
+    unpack_x_y_sample_weight,
+)
 
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.tf_utils import is_tensor_type
@@ -54,7 +57,7 @@ def _convert_inputs_to_dataset(
             )
         return x
 
-    inputs = keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
+    inputs = pack_x_y_sample_weight(x, y, sample_weight)
     try:
         ds = tf.data.Dataset.from_tensor_slices(inputs)
     except ValueError as e:
@@ -249,7 +252,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, y, sample_weight = unpack_x_y_sample_weight(data)
         return super().train_on_batch(
             x=x,
             y=y,
@@ -266,7 +269,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x, y, sample_weight)
-            x, y, sample_weight = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, y, sample_weight = unpack_x_y_sample_weight(data)
         return super().test_on_batch(
             x=x,
             y=y,
@@ -281,7 +284,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x)
-            x, _, _ = tf.keras.utils.unpack_x_y_sample_weight(data)
+            x, _, _ = unpack_x_y_sample_weight(data)
         return super().predict_on_batch(
             x=x,
             **kwargs,

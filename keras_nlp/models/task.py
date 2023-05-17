@@ -15,24 +15,25 @@
 
 import os
 
+import keras_core as keras
 import tensorflow as tf
-from tensorflow import keras
+from keras_core.utils import io_utils
+from keras_core.utils import text_rendering
+from keras_core.utils.file_utils import get_file
 
-from keras_nlp.utils.keras_utils import print_msg
-from keras_nlp.utils.keras_utils import print_row
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class Task(PipelineModel):
     """Base class for Task models."""
 
     def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._backbone = None
         self._preprocessor = None
-        super().__init__(*args, **kwargs)
 
     def _check_for_loss_mismatch(self):
         """Check for a softmax/from_logits mismatch after compile.
@@ -77,10 +78,6 @@ class Task(PipelineModel):
                 "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)`. "
             )
 
-    def compile(self, *args, **kwargs):
-        super().compile(*args, **kwargs)
-        self._check_for_loss_mismatch()
-
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
 
@@ -107,10 +104,11 @@ class Task(PipelineModel):
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Task constructors.
         return {
-            "backbone": keras.layers.serialize(self.backbone),
-            "preprocessor": keras.layers.serialize(self.preprocessor),
+            "backbone": keras.saving.serialize_keras_object(self.backbone),
+            "preprocessor": keras.saving.serialize_keras_object(
+                self.preprocessor
+            ),
             "name": self.name,
-            "trainable": self.trainable,
         }
 
     @classmethod
@@ -118,11 +116,13 @@ class Task(PipelineModel):
         # The default `from_config()` for functional models will return a
         # vanilla `keras.Model`. We override it to get a subclass instance back.
         if "backbone" in config and isinstance(config["backbone"], dict):
-            config["backbone"] = keras.layers.deserialize(config["backbone"])
+            config["backbone"] = keras.saving.deserialize_keras_object(
+                config["backbone"]
+            )
         if "preprocessor" in config and isinstance(
             config["preprocessor"], dict
         ):
-            config["preprocessor"] = keras.layers.deserialize(
+            config["preprocessor"] = keras.saving.deserialize_keras_object(
                 config["preprocessor"]
             )
         return cls(**config)
@@ -192,7 +192,7 @@ class Task(PipelineModel):
         if not load_weights:
             return model
 
-        weights = keras.utils.get_file(
+        weights = get_file(
             "model.h5",
             metadata["weights_url"],
             cache_subdir=os.path.join("models", preset),
@@ -224,14 +224,6 @@ class Task(PipelineModel):
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
 
-    @property
-    def layers(self):
-        # Remove preprocessor from layers so it does not show up in the summary.
-        layers = super().layers
-        if self.preprocessor and self.preprocessor in layers:
-            layers.remove(self.preprocessor)
-        return layers
-
     def summary(
         self,
         line_length=None,
@@ -241,28 +233,31 @@ class Task(PipelineModel):
     ):
         """Override `model.summary()` to show a preprocessor if set."""
         # Defaults are copied from core Keras; we should try to stay in sync.
-        line_length = line_length or 98
-        positions = positions or [0.33, 0.55, 0.67, 1.0]
-        if positions[-1] <= 1:
-            positions = [int(line_length * p) for p in positions]
+        line_length = line_length or 108
+        positions = positions or [0.3, 0.56, 0.70, 1.0]
         if print_fn is None:
-            print_fn = print_msg
+            print_fn = io_utils.print_msg
 
         if self.preprocessor:
-            column_names = ["Tokenizer (type)", "Vocab #"]
             tokenizer = self.preprocessor.tokenizer
-            column_values = [
-                f"{tokenizer.name} ({tokenizer.__class__.__name__})",
-                f"{tokenizer.vocabulary_size()}",
+            rows = [
+                [
+                    f"{tokenizer.name} ({tokenizer.__class__.__name__})",
+                    f"{tokenizer.vocabulary_size()}",
+                ],
             ]
-
-            print_fn(f'Preprocessor: "{self.preprocessor.name}"')
-            print_fn("_" * line_length)
-            print_row(column_names, positions[1:3], print_fn)
-            print_fn("=" * line_length)
-            print_row(column_values, positions[1:3], print_fn)
-            print_fn("_" * line_length)
-            print_fn(" " * line_length)
+            title = f' Preprocessor: "{self.preprocessor.name}"'
+            print_fn(text_rendering.highlight_msg(title))
+            table = text_rendering.TextTable(
+                header=["Tokenizer (type)", "Vocab #"],
+                rows=rows,
+                positions=[0.56, 1.0],
+                # Left align layer name, center-align everything else
+                alignments=["left", "center"],
+                max_line_length=line_length,
+            )
+            table_str = table.make()
+            print_fn(table_str)
 
         super().summary(
             line_length=line_length,

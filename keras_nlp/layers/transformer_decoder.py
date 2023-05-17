@@ -14,8 +14,8 @@
 
 """Transformer decoder block implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-from tensorflow import keras
+import keras_core as keras
+from keras_core import operations as ops
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.cached_multi_head_attention import (
@@ -304,13 +304,13 @@ class TransformerDecoder(keras.layers.Layer):
         x = decoder_sequence  # Intermediate result.
 
         # Compute self attention mask.
-        batch_size = tf.shape(decoder_sequence)[0]
-        input_length = output_length = tf.shape(decoder_sequence)[1]
+        batch_size = ops.shape(decoder_sequence)[0]
+        input_length = output_length = ops.shape(decoder_sequence)[1]
         # We need to handle a rectangular causal mask when doing cached
         # decoding. For generative inference, `decoder_sequence` will
         # generally be length 1, and `cache` will be the full generation length.
         if self_attention_cache is not None:
-            input_length = tf.shape(self_attention_cache)[2]
+            input_length = ops.shape(self_attention_cache)[2]
         self_attention_mask = compute_causal_mask(
             batch_size,
             input_length,
@@ -323,7 +323,7 @@ class TransformerDecoder(keras.layers.Layer):
             decoder_sequence, decoder_padding_mask, decoder_attention_mask
         )
         if decoder_mask is not None:
-            self_attention_mask = tf.minimum(decoder_mask, self_attention_mask)
+            self_attention_mask = ops.minimum(decoder_mask, self_attention_mask)
 
         # Self attention block.
         residual = x

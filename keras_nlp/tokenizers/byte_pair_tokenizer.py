@@ -26,7 +26,7 @@ from typing import List
 
 import regex as re
 import tensorflow as tf
-from tensorflow import keras
+from keras_core.utils.file_utils import get_file
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
@@ -632,13 +632,13 @@ class BytePairTokenizer(tokenizer.Tokenizer):
             )
         metadata = cls.presets[preset]
 
-        vocabulary = keras.utils.get_file(
+        vocabulary = get_file(
             "vocab.json",
             metadata["vocabulary_url"],
             cache_subdir=os.path.join("models", preset),
             file_hash=metadata["vocabulary_hash"],
         )
-        merges = keras.utils.get_file(
+        merges = get_file(
             "merges.txt",
             metadata["merges_url"],
             cache_subdir=os.path.join("models", preset),

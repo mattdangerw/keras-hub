@@ -16,13 +16,14 @@
 
 import os
 
-from tensorflow import keras
+import keras_core as keras
+from keras_core.utils.file_utils import get_file
 
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,7 +38,6 @@ class Backbone(keras.Model):
         # models is nested and cannot be passed to our Backbone constructors.
         return {
             "name": self.name,
-            "trainable": self.trainable,
         }
 
     @classmethod
@@ -96,7 +96,7 @@ class Backbone(keras.Model):
         if not load_weights:
             return model
 
-        weights = keras.utils.get_file(
+        weights = get_file(
             "model.h5",
             metadata["weights_url"],
             cache_subdir=os.path.join("models", preset),

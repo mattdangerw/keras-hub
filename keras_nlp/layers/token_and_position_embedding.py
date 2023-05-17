@@ -14,7 +14,7 @@
 
 """Creates an Embedding Layer and adds Positional Embeddings"""
 
-from tensorflow import keras
+import keras_core as keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding

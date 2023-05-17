@@ -16,8 +16,7 @@
 
 import copy
 
-import tensorflow as tf
-from tensorflow import keras
+import keras_core as keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
@@ -29,6 +28,16 @@ from keras_nlp.utils.python_utils import classproperty
 
 def bert_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+# TODO slice op for keras-core!
+@keras.saving.register_keras_serializable(package="keras_nlp")
+class Pooler(keras.layers.Layer):
+    def call(self, inputs):
+        return inputs[:, 0, :]
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 @keras_nlp_export("keras_nlp.models.BertBackbone")
@@ -146,7 +155,7 @@ class BertBackbone(Backbone):
             name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
-            dtype=tf.float32,
+            dtype="float32",
         )(x)
         x = keras.layers.Dropout(
             dropout,
@@ -170,12 +179,13 @@ class BertBackbone(Backbone):
         # Construct the two BERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
-        pooled_output = keras.layers.Dense(
+        x = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
-        )(x[:, cls_token_index, :])
+        )(x)
+        pooled_output = Pooler()(x)
 
         # Instantiate using Functional API Model constructor
         super().__init__(

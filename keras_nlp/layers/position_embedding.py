@@ -14,8 +14,8 @@
 
 """Position embedding implementation based on `keras.layers.Layer`."""
 
-import tensorflow as tf
-from tensorflow import keras
+import keras_core as keras
+from keras_core import operations as ops
 
 from keras_nlp.api_export import keras_nlp_export
 
@@ -104,32 +104,18 @@ class PositionEmbedding(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs, start_index=0):
-        if isinstance(inputs, tf.RaggedTensor):
-            bounding_shape = inputs.bounding_shape()
-            position_embeddings = self._trim_and_broadcast_position_embeddings(
-                bounding_shape,
-                start_index,
-            )
-            # then apply row lengths to recreate the same ragged shape as inputs
-            return tf.RaggedTensor.from_tensor(
-                position_embeddings,
-                inputs.nested_row_lengths(),
-            )
-        else:
-            return self._trim_and_broadcast_position_embeddings(
-                tf.shape(inputs),
-                start_index,
-            )
+        return self._trim_and_broadcast_position_embeddings(
+            ops.shape(inputs),
+            start_index,
+        )
 
     def _trim_and_broadcast_position_embeddings(self, shape, start_index):
-        feature_length = shape[-1]
-        sequence_length = shape[-2]
+        end_index = start_index + shape[-2]
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
-        position_embeddings = tf.slice(
-            self.position_embeddings,
-            (start_index, 0),
-            (sequence_length, feature_length),
-        )
+        position_embeddings = self.position_embeddings[start_index:end_index, :]
         # then broadcast to add the missing dimensions to match "shape"
-        return tf.broadcast_to(position_embeddings, shape)
+        return ops.broadcast_to(position_embeddings, shape)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

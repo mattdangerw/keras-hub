@@ -14,8 +14,9 @@
 
 """Masked Language Model (MaskedLM) head."""
 
+import keras_core as keras
 import tensorflow as tf
-from tensorflow import keras
+from keras_core import operations as ops
 
 from keras_nlp.api_export import keras_nlp_export
 
@@ -141,11 +142,11 @@ class MaskedLMHead(keras.layers.Layer):
                 )
             self.vocabulary_size = shape[0]
 
-    def build(self, input_shapes):
+    def build(self, inputs_shape, masked_positions_shape):
         if self.embedding_weights is not None:
             feature_size = self.embedding_weights.shape[-1]
         else:
-            feature_size = input_shapes[-1]
+            feature_size = inputs_shape[-1]
 
         self._dense = keras.layers.Dense(
             feature_size,
@@ -170,9 +171,10 @@ class MaskedLMHead(keras.layers.Layer):
             dtype=self.dtype,
         )
 
-    def call(self, inputs, mask_positions):
+    def call(self, inputs, masked_positions):
         # Gather the encoded tokens at the masked indices.
-        x = tf.gather(inputs, mask_positions, axis=1, batch_dims=1)
+        # TODO gather op for keras-core.
+        x = tf.gather(inputs, masked_positions, axis=1, batch_dims=1)
 
         # Apply a trainable linear transformation and a layer norm.
         x = self._dense(x)
@@ -180,13 +182,12 @@ class MaskedLMHead(keras.layers.Layer):
 
         # Transform encodings to vocabulary_size predictions.
         if self.embedding_weights is None:
-            outputs = tf.matmul(x, self._kernel)
+            outputs = ops.matmul(x, self._kernel)
         else:
-            outputs = tf.matmul(
-                x,
-                tf.cast(self.embedding_weights, self.compute_dtype),
-                transpose_b=True,
+            kernel = ops.transpose(
+                ops.cast(self.embedding_weights, self.compute_dtype)
             )
+            outputs = ops.matmul(x, kernel)
         outputs = outputs + self._bias
 
         # Apply a final activation.
@@ -214,3 +215,8 @@ class MaskedLMHead(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape, masked_positions_shape):
+        output_shape = list(masked_positions_shape)
+        output_shape[-1] = self.vocabulary_size
+        return tuple(output_shape)
