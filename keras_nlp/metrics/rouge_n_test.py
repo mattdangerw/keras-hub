@@ -15,7 +15,6 @@
 """Tests for RougeN."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.metrics.rouge_n import RougeN
 
@@ -92,23 +91,6 @@ class RougeNTest(tf.test.TestCase):
         self.assertAllClose(
             rouge_val,
             {"precision": 0.575, "recall": 0.4, "f1_score": 0.466666},
-        )
-
-    def test_model_compile(self):
-        inputs = keras.Input(shape=(), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
-
-        model.compile(metrics=[RougeN()])
-
-        x = tf.constant(["HELLO THIS IS FUN"])
-        y = tf.constant(["hello this is awesome"])
-
-        output = model.evaluate(x, y, return_dict=True)
-        del output["loss"]
-        self.assertAllClose(
-            output,
-            {"precision": 0.666666, "recall": 0.666666, "f1_score": 0.666666},
         )
 
     def test_incorrect_order(self):

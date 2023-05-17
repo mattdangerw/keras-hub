@@ -15,35 +15,30 @@
 import tensorflow as tf
 
 import keras_nlp.layers.transformer_layer_utils as utils
+from keras_nlp.backend import ops
 
 
-class TransformerEncoderTest(tf.test.TestCase):
+class TransformerLayerUtilsTest(tf.test.TestCase):
     def test_compute_causal_mask(self):
         mask = utils.compute_causal_mask(1, 2, 2)
-        self.assertTrue((mask.numpy() == [[1, 0], [1, 1]]).all())
+        self.assertAllEqual(mask, [[[1, 0], [1, 1]]])
 
     def test_merge_padding_and_attention_mask(self):
-        padding_mask = tf.convert_to_tensor([[1, 1, 0]])
-        attention_mask = tf.convert_to_tensor(
-            [[[0, 0, 1], [0, 1, 0], [1, 0, 0]]]
-        )
-        inputs = tf.random.uniform(shape=[1, 3, 2])
+        padding_mask = ops.array([[1, 1, 0]])
+        attention_mask = ops.array([[[0, 0, 1], [0, 1, 0], [1, 0, 0]]])
+        inputs = ops.random.uniform(shape=[1, 3, 2])
         merged_mask = utils.merge_padding_and_attention_mask(
             inputs,
             padding_mask,
             attention_mask,
         )
-        self.assertTrue(
-            (merged_mask.numpy() == [[0, 0, 0], [0, 1, 0], [1, 0, 0]]).all()
-        )
+        self.assertAllEqual(merged_mask, [[[0, 0, 0], [0, 1, 0], [1, 0, 0]]])
 
     def test_bad_mask_shapes(self):
         with self.assertRaises(ValueError):
-            padding_mask = tf.convert_to_tensor([[[1, 1, 0], [1, 0, 0]]])
-            attention_mask = tf.convert_to_tensor(
-                [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
-            )
-            inputs = tf.random.uniform(shape=[1, 3, 2])
+            padding_mask = ops.array([[[1, 1, 0], [1, 0, 0]]])
+            attention_mask = ops.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])
+            inputs = ops.random.uniform(shape=[1, 3, 2])
             utils.merge_padding_and_attention_mask(
                 inputs,
                 padding_mask,
@@ -51,9 +46,9 @@ class TransformerEncoderTest(tf.test.TestCase):
             )
 
         with self.assertRaises(ValueError):
-            padding_mask = tf.convert_to_tensor([[1, 1, 0]])
-            attention_mask = tf.convert_to_tensor([[0, 0, 1], [1, 0, 0]])
-            inputs = tf.random.uniform(shape=[1, 3, 2])
+            padding_mask = ops.array([[1, 1, 0]])
+            attention_mask = ops.array([[0, 0, 1], [1, 0, 0]])
+            inputs = ops.random.uniform(shape=[1, 3, 2])
             utils.merge_padding_and_attention_mask(
                 inputs,
                 padding_mask,

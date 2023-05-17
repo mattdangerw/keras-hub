@@ -14,9 +14,8 @@
 
 from typing import List
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 
 
 @keras_nlp_export("keras_nlp.tokenizers.Tokenizer")
@@ -61,6 +60,12 @@ class Tokenizer(keras.layers.Layer):
     tokenizer.detokenize(["This", "is", "a", "test"])
     ```
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
 
     def __new__(cls, *args, **kwargs):
         # Wrap the `tokenize` and `detokenize` methods so they route through

@@ -19,8 +19,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
 
@@ -141,8 +141,8 @@ class RobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             self.preprocessor(ambiguous_input)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),

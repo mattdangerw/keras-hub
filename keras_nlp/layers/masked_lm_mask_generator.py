@@ -13,9 +13,9 @@
 # limitations under the License.
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import assert_tf_text_installed
 
 try:
@@ -134,6 +134,11 @@ class MaskedLMMaskGenerator(keras.layers.Layer):
         assert_tf_text_installed(self.__class__.__name__)
 
         super().__init__(**kwargs)
+
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
         self.vocabulary_size = vocabulary_size
         self.unselectable_token_ids = unselectable_token_ids
         self.mask_selection_rate = mask_selection_rate

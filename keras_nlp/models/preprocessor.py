@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tensorflow import keras
-
+from keras_nlp.backend import keras
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.utils.register_keras_serializable(package="keras_nlp")
+@keras.saving.register_keras_serializable(package="keras_nlp")
 class Preprocessor(keras.layers.Layer):
     """Base class for model preprocessors."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tokenizer = None
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
 
     @property
     def tokenizer(self):

@@ -19,8 +19,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
 
 
@@ -76,8 +76,8 @@ class OPTTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             OPTTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),

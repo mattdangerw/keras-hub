@@ -15,9 +15,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.task import Task
@@ -26,7 +25,6 @@ from keras_nlp.models.xlm_roberta.xlm_roberta_masked_lm_preprocessor import (
     XLMRobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_presets import backbone_presets
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -143,7 +141,7 @@ class XLMRobertaMaskedLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty

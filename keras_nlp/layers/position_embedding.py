@@ -15,9 +15,10 @@
 """Position embedding implementation based on `keras.layers.Layer`."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.PositionEmbedding")
@@ -104,15 +105,22 @@ class PositionEmbedding(keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs, start_index=0):
-        shape = tf.shape(inputs)
+        shape = ops.shape(inputs)
         feature_length = shape[-1]
         sequence_length = shape[-2]
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
-        position_embeddings = tf.slice(
-            self.position_embeddings,
-            (start_index, 0),
-            (sequence_length, feature_length),
-        )
-        # then broadcast to add the missing dimensions to match "shape"
-        return tf.broadcast_to(position_embeddings, shape)
+        # TODO: remove jax hack.
+        if isinstance(inputs, tf.Tensor):
+            position_embeddings = ops.slice(
+                self.position_embeddings,
+                (start_index, 0),
+                (sequence_length, feature_length),
+            )
+        else:
+            position_embeddings = self.position_embeddings[start_index:, :]
+            position_embeddings = position_embeddings[:sequence_length, :]
+        return ops.broadcast_to(position_embeddings, shape)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape

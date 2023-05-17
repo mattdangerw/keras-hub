@@ -16,9 +16,10 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.gpt2.gpt2_backbone import GPT2Backbone
 from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
     GPT2CausalLMPreprocessor,
@@ -26,9 +27,17 @@ from keras_nlp.models.gpt2.gpt2_causal_lm_preprocessor import (
 from keras_nlp.models.gpt2.gpt2_presets import backbone_presets
 from keras_nlp.models.task import Task
 from keras_nlp.samplers.serialization import get as get_sampler
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.tensor_utils import tensor_to_string_list
+
+
+class ReverseEmbedding(keras.layers.Layer):
+    def __init__(self, embedding, **kwargs):
+        super().__init__(**kwargs)
+        self.embedding = embedding
+
+    def call(self, x):
+        return ops.matmul(x, ops.transpose(self.embedding.embeddings))
 
 
 @keras_nlp_export("keras_nlp.models.GPT2CausalLM")
@@ -164,11 +173,7 @@ class GPT2CausalLM(Task):
         x = backbone(inputs)
         # Use token embedding weights to project from the token representation
         # to vocabulary logits.
-        outputs = tf.matmul(
-            x,
-            backbone.token_embedding.embeddings,
-            transpose_b=True,
-        )
+        outputs = ReverseEmbedding(backbone.token_embedding)(x)
 
         # Instantiate using Functional API Model constructor.
         super().__init__(
@@ -187,7 +192,7 @@ class GPT2CausalLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(2e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty
@@ -275,7 +280,7 @@ class GPT2CausalLM(Task):
         sampler="top_k",
         **kwargs,
     ):
-        xla_compatible = is_xla_compatible(self)
+        xla_compatible = True
         super().compile(
             *args,
             run_eagerly=run_eagerly,
@@ -518,7 +523,7 @@ class GPT2CausalLM(Task):
                 distribution, and the second for model parallel distribution.
 
         Returns:
-            A `tf.keras.dtensor.experimental.LayoutMap` which contains the
+            A `keras.dtensor.experimental.LayoutMap` which contains the
             proper layout to weights mapping for the model parallel setting.
 
         Examples:

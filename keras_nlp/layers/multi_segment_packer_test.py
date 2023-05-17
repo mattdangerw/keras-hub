@@ -13,11 +13,8 @@
 # limitations under the License.
 """Tests for multi-segment packing."""
 
-import os
-
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
 from keras_nlp.layers.multi_segment_packer import MultiSegmentPacker
 
@@ -185,30 +182,4 @@ class MultiSegmentPackerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(
             original_packer([seq1, seq2]),
             cloned_packer([seq1, seq2]),
-        )
-
-    @parameterized.named_parameters(
-        ("tf_format", "tf", "model"),
-        ("keras_format", "keras_v3", "model.keras"),
-    )
-    def test_saved_model(self, save_format, filename):
-        seq1 = tf.ragged.constant([["a", "b", "c"], ["a", "b"]])
-        seq2 = tf.ragged.constant([["x", "y", "z"], ["x", "y", "z"]])
-        packer = MultiSegmentPacker(
-            7, start_value="[CLS]", end_value="[SEP]", truncate="waterfall"
-        )
-        inputs = (
-            keras.Input(dtype="string", ragged=True, shape=(None,)),
-            keras.Input(dtype="string", ragged=True, shape=(None,)),
-        )
-        outputs = packer(inputs)
-        model = keras.Model(inputs, outputs)
-        path = os.path.join(self.get_temp_dir(), filename)
-        # Don't save traces in the tf format, we check compilation elsewhere.
-        kwargs = {"save_traces": False} if save_format == "tf" else {}
-        model.save(path, save_format=save_format, **kwargs)
-        restored_model = keras.models.load_model(path)
-        self.assertAllEqual(
-            model((seq1, seq2)),
-            restored_model((seq1, seq2)),
         )

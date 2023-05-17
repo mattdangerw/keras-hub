@@ -16,9 +16,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
@@ -208,7 +207,6 @@ class BartBackbone(Backbone):
                 layer_norm_epsilon=1e-5,
                 kernel_initializer=bart_kernel_initializer(),
                 name=f"transformer_decoder_layer_{i}",
-                has_cross_attention=True,
             )
             x = transformer_decoder_layer(
                 decoder_sequence=x,

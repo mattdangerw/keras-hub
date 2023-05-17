@@ -15,9 +15,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
@@ -27,7 +26,6 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
 )
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -194,7 +192,7 @@ class DistilBertClassifier(Task):
             ),
             optimizer=keras.optimizers.Adam(5e-5),
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     def get_config(self):

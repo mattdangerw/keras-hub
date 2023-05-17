@@ -18,17 +18,13 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 
 
-class OPTTest(tf.test.TestCase, parameterized.TestCase):
+class OPTBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        # For DTensor.
-        keras.backend.experimental.enable_tf_random_generator()
-        keras.utils.set_random_seed(1337)
-
         self.backbone = OPTBackbone(
             vocabulary_size=10,
             num_layers=2,
@@ -70,8 +66,8 @@ class OPTTest(tf.test.TestCase, parameterized.TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 

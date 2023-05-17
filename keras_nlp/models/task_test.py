@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.losses import SparseCategoricalCrossentropy
 
+from keras_nlp.backend import keras
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.task import Task
 from keras_nlp.tokenizers.tokenizer import Tokenizer
@@ -45,36 +44,52 @@ class TestTask(tf.test.TestCase):
         preprocessor = SimplePreprocessor()
         model = SimpleTask(preprocessor)
         summary = []
-        model.summary(print_fn=lambda x: summary.append(x))
+        model.summary(print_fn=lambda x, line_break: summary.append(x))
         self.assertRegex("\n".join(summary), "Preprocessor:")
 
     def test_summary_without_preprocessor(self):
         model = SimpleTask()
         summary = []
-        model.summary(print_fn=lambda x: summary.append(x))
+        model.summary(print_fn=lambda x, line_break: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
     def test_mismatched_loss(self):
         # Logit output.
         model = SimpleTask(activation=None)
-        model.compile(loss=SparseCategoricalCrossentropy(from_logits=True))
+        model.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        )
         # Non-standard losses should not throw.
         model.compile(loss="mean_squared_error")
         with self.assertRaises(ValueError):
             model.compile(loss="sparse_categorical_crossentropy")
         with self.assertRaises(ValueError):
-            model.compile(loss=SparseCategoricalCrossentropy(from_logits=False))
+            model.compile(
+                loss=keras.losses.SparseCategoricalCrossentropy(
+                    from_logits=False
+                )
+            )
 
         # Probability output.
         model = SimpleTask(activation="softmax")
-        model.compile(loss=SparseCategoricalCrossentropy(from_logits=False))
+        model.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        )
         model.compile(loss="sparse_categorical_crossentropy")
         # Non-standard losses should not throw.
         model.compile(loss="mean_squared_error")
         with self.assertRaises(ValueError):
-            model.compile(loss=SparseCategoricalCrossentropy(from_logits=True))
+            model.compile(
+                loss=keras.losses.SparseCategoricalCrossentropy(
+                    from_logits=True
+                )
+            )
 
         # Non-standard activations should not throw.
         model = SimpleTask(activation="tanh")
-        model.compile(loss=SparseCategoricalCrossentropy(from_logits=True))
-        model.compile(loss=SparseCategoricalCrossentropy(from_logits=False))
+        model.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        )
+        model.compile(
+            loss=keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+        )

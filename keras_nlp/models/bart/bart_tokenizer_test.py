@@ -16,10 +16,11 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
 
 
@@ -74,10 +75,19 @@ class BartTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             BartTokenizer(vocabulary=["a", "b", "c"], merges=[])
 
+    def test_serialization(self):
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
+        self.assertEqual(
+            new_tokenizer.get_config(),
+            self.tokenizer.get_config(),
+        )
+
     @parameterized.named_parameters(
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

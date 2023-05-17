@@ -16,11 +16,12 @@
 
 import copy
 
-from tensorflow import keras
 from tensorflow.experimental import dtensor
 from tensorflow.experimental.dtensor import Layout
+from tensorflow.keras.dtensor.experimental import LayoutMap
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_decoder import TransformerDecoder
 from keras_nlp.models.backbone import Backbone
@@ -213,7 +214,7 @@ class GPT2Backbone(Backbone):
                 distribution, and the second for model parallel distribution.
 
         Returns:
-            A `tf.keras.dtensor.experimental.LayoutMap` which contains the
+            A `keras.dtensor.experimental.LayoutMap` which contains the
             proper layout to weights mapping for the model parallel setting.
 
         Examples:
@@ -239,7 +240,7 @@ class GPT2Backbone(Backbone):
         _, model_dim = mesh.dim_names
         unshard_dim = dtensor.UNSHARDED
 
-        layout_map = keras.dtensor.experimental.LayoutMap(mesh=mesh)
+        layout_map = LayoutMap(mesh=mesh)
         # Embedding sharding
         layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
 

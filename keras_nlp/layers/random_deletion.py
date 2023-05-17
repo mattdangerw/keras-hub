@@ -14,9 +14,9 @@
 import random
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.utils.tensor_utils import is_integer_dtype
 from keras_nlp.utils.tensor_utils import is_string_dtype
 
@@ -127,6 +127,11 @@ class RandomDeletion(keras.layers.Layer):
             )
 
         super().__init__(dtype=dtype, name=name, **kwargs)
+
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
         self.rate = rate
         self.max_deletions = max_deletions
         self.seed = random.randint(1, 1e9) if seed is None else seed
@@ -270,3 +275,8 @@ class RandomDeletion(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = None
+        return tuple(inputs_shape)

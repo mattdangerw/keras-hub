@@ -16,9 +16,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.transformer_encoder import TransformerEncoder
 from keras_nlp.models.backbone import Backbone
@@ -169,12 +168,13 @@ class BertBackbone(Backbone):
         # Construct the two BERT outputs. The pooled output is a dense layer on
         # top of the [CLS] token.
         sequence_output = x
-        pooled_output = keras.layers.Dense(
+        x = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=bert_kernel_initializer(),
             activation="tanh",
             name="pooled_dense",
-        )(x[:, cls_token_index, :])
+        )(x)
+        pooled_output = x[:, cls_token_index, :]
 
         # Instantiate using Functional API Model constructor
         super().__init__(

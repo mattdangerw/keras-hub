@@ -16,10 +16,11 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.whisper.whisper_tokenizer import WhisperTokenizer
 
 
@@ -116,6 +117,7 @@ class WhisperTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.large  # Saving is slow, so mark these large.
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

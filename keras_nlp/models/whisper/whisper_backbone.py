@@ -14,10 +14,9 @@
 """Whisper backbone model."""
 
 
-import tensorflow as tf
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
@@ -29,6 +28,11 @@ from keras_nlp.models.whisper.whisper_encoder import WhisperEncoder
 
 def whisper_kernel_initializer(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+class Padder(keras.layers.Layer):
+    def call(self, x):
+        return ops.pad(x, [[0, 0], [1, 1], [0, 0]])
 
 
 @keras_nlp_export("keras_nlp.models.WhisperBackbone")
@@ -142,9 +146,7 @@ class WhisperBackbone(Backbone):
         # For the second conv. layer, we cannot use `padding="same"` since
         # that corresponds to a padding size of 1.5 (since stride is 2). Hence,
         # we will manually pad the input.
-        embedded_features = tf.pad(
-            embedded_features, paddings=[[0, 0], [1, 1], [0, 0]]
-        )
+        embedded_features = Padder()(embedded_features)
         encoder_conv_layer_2 = keras.layers.Conv1D(
             filters=hidden_dim,
             kernel_size=3,
@@ -228,7 +230,6 @@ class WhisperBackbone(Backbone):
                 kernel_initializer=whisper_kernel_initializer(),
                 normalize_first=True,
                 name=f"transformer_decoder_layer_{i}",
-                has_cross_attention=True,
             )
             x = transformer_decoder_layer(
                 decoder_sequence=x,

@@ -15,9 +15,10 @@
 """FNet encoder block implementation based on `keras.layers.Layer`."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import config
+from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import clone_initializer
 
 
@@ -85,6 +86,13 @@ class FNetEncoder(keras.layers.Layer):
         name=None,
         **kwargs
     ):
+        if config.backend() != "tensorflow":
+            raise ValueError(
+                "FNetEncoder requires the tensorflow backend to run. "
+                "Please use the tensorflow backend, e.g. via "
+                "`KERAS_BACKEND=tensorflow`."
+            )
+
         super().__init__(name=name, **kwargs)
         self.intermediate_dim = intermediate_dim
         self.dropout = dropout
@@ -93,17 +101,19 @@ class FNetEncoder(keras.layers.Layer):
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
 
-    def build(self, input_shape):
+    def build(self, inputs_shape):
         # Create layers based on input shape.
-        feature_size = input_shape[-1]
+        feature_size = inputs_shape[-1]
 
         # Layer Norm layers.
         self._mixing_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon
         )
+        self._mixing_layer_norm.build(inputs_shape)
         self._output_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon
         )
+        self._output_layer_norm.build(inputs_shape)
 
         # Feedforward layers.
         self._intermediate_dense = keras.layers.Dense(
@@ -112,10 +122,14 @@ class FNetEncoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
+        self._intermediate_dense.build(inputs_shape)
         self._output_dense = keras.layers.Dense(
             feature_size,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+        )
+        self._output_dense.build(
+            self._intermediate_dense.compute_output_shape(inputs_shape)
         )
         self._output_dropout = keras.layers.Dropout(rate=self.dropout)
 
@@ -176,3 +190,6 @@ class FNetEncoder(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        return inputs_shape

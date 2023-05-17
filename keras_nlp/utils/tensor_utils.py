@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
 import tensorflow as tf
-
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
 
 try:
     import tensorflow_text as tf_text
@@ -84,10 +78,7 @@ def assert_tf_text_installed(symbol_name):
 
 
 def is_tensor_type(x):
-    if pd is None:
-        return isinstance(x, (tf.Tensor, np.ndarray))
-    else:
-        return isinstance(x, (tf.Tensor, np.ndarray, pd.Series, pd.DataFrame))
+    return hasattr(x, "__array__")
 
 
 def is_floating_dtype(dtype):

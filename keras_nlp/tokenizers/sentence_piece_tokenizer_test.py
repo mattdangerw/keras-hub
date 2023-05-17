@@ -15,11 +15,12 @@
 import io
 import os
 
+import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 
@@ -117,6 +118,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         with self.assertRaises(ValueError):
             tokenizer.id_to_token(-1)
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox."])
         tokenizer = SentencePieceTokenizer(
@@ -198,6 +200,7 @@ class SentencePieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         filepath = os.path.join(self.get_temp_dir(), "model.txt")
         input_data = tf.constant(["the quick brown whale."])

@@ -17,8 +17,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers.byte_pair_tokenizer import BytePairTokenizer
 
 VOCAB_PATH = keras.utils.get_file(
@@ -54,7 +54,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
     def test_tokenize_string_output(self):
         input_data = ["quick brown fox.", "slow black bear."]
         tokenizer = BytePairTokenizer(
-            vocabulary=VOCAB_PATH, merges=MERGE_PATH, dtype=tf.string
+            vocabulary=VOCAB_PATH, merges=MERGE_PATH, dtype="string"
         )
         call_output = tokenizer(input_data)
         expected = tf.ragged.constant(
@@ -89,7 +89,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         tokenizer = BytePairTokenizer(
             vocabulary=VOCAB_PATH,
             merges=MERGE_PATH,
-            dtype=tf.string,
+            dtype="string",
             add_prefix_space=True,
         )
         call_output = tokenizer(input_data)
@@ -181,6 +181,7 @@ class BytePairTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown whale."])
         tokenizer = self.tokenizer
