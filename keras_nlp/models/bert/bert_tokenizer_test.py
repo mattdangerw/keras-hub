@@ -18,12 +18,13 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class BertTokenizerTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
@@ -36,7 +37,7 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [5, 6, 7, 8, 1])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["THE QUICK BROWN FOX.", "THE FOX."])
+        input_data = ["THE QUICK BROWN FOX.", "THE FOX."]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[5, 6, 7, 8, 1], [5, 8, 1]])
 
@@ -59,8 +60,8 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             BertTokenizer(vocabulary=["a", "b", "c"])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
@@ -71,6 +72,7 @@ class BertTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
         tokenizer = BertTokenizer(vocabulary=self.vocab)

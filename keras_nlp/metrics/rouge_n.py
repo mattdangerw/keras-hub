@@ -118,17 +118,6 @@ class RougeN(RougeBase):
     ... )
     >>> rouge_n(y_true, y_pred)["f1_score"]
     <tf.Tensor: shape=(), dtype=float32, numpy=0.2857143>
-
-    3. Pass the metric to `model.compile()`.
-    >>> inputs = keras.Input(shape=(), dtype='string')
-    >>> outputs = tf.strings.lower(inputs)
-    >>> model = keras.Model(inputs, outputs)
-    >>> model.compile(metrics=[keras_nlp.metrics.RougeN()])
-    >>> x = tf.constant(["HELLO THIS IS FUN"])
-    >>> y = tf.constant(["hello this is awesome"])
-    >>> metric_dict = model.evaluate(x, y, return_dict=True)
-    >>> metric_dict["f1_score"]
-    0.6666666865348816
     """
 
     def __init__(

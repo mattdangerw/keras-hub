@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for FNet tokenizer."""
-
 import io
 import os
 
@@ -21,12 +20,14 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class FNetTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -57,14 +58,14 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [2, 10, 6, 8])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[2, 10, 6, 8], [2, 7, 9, 11]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[2, 10, 6, 8]])
+        input_data = [[2, 10, 6, 8]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         tokenizer = FNetTokenizer(proto=self.proto)
@@ -84,8 +85,8 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
             FNetTokenizer(proto=bytes_io.getvalue())
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
@@ -96,6 +97,7 @@ class FNetTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

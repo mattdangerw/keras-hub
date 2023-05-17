@@ -14,10 +14,9 @@
 
 """Perplexity metric."""
 
-import tensorflow as tf
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.utils.tensor_utils import is_floating_dtype
 
 
@@ -128,39 +127,36 @@ class Perplexity(keras.metrics.Metric):
     def update_state(self, y_true, y_pred, sample_weight=None):
         # y_true shape: (batch_size, seq_len)
         # y_pred shape: (batch_size, seq_len, vocab_size)
-        y_true = tf.cast(y_true, self.dtype)
-        y_pred = tf.cast(y_pred, self.dtype)
+        y_true = ops.cast(y_true, self.dtype)
+        y_pred = ops.cast(y_pred, self.dtype)
 
         if sample_weight is not None:
-            sample_weight = tf.cast(sample_weight, self.dtype)
+            sample_weight = ops.cast(sample_weight, self.dtype)
 
-        batch_size = tf.cast(tf.shape(y_true)[0], self.dtype)
+        batch_size = ops.cast(ops.shape(y_true)[0], self.dtype)
 
         if self.mask_token_id is not None:
-            mask = tf.cast(
-                tf.math.logical_not(tf.equal(y_true, self.mask_token_id)),
-                self.dtype,
-            )
+            mask = ops.cast(y_true != self.mask_token_id, self.dtype)
             if sample_weight is None:
                 sample_weight = mask
             else:
-                sample_weight = tf.multiply(mask, sample_weight)
+                sample_weight = ops.multiply(mask, sample_weight)
 
         # Calculate the Cross Entropy Loss.
-        crossentropy_value = tf.cast(
+        crossentropy_value = ops.cast(
             self._crossentropy(y_true, y_pred, sample_weight=sample_weight),
             self.dtype,
         )  # scalar
 
         # Divide the loss by the number of non-masked tokens
         if sample_weight is not None:
-            crossentropy_value = crossentropy_value / tf.reduce_sum(
+            crossentropy_value = crossentropy_value / ops.sum(
                 sample_weight
             )  # scalar
         else:
             crossentropy_value = crossentropy_value / (
-                tf.cast(tf.shape(y_true)[0], self.dtype)
-                * tf.cast(tf.shape(y_true)[1], self.dtype)
+                ops.cast(ops.shape(y_true)[0], self.dtype)
+                * ops.cast(ops.shape(y_true)[1], self.dtype)
             )  # scalar
 
         self._aggregate_crossentropy.assign_add(batch_size * crossentropy_value)
@@ -169,7 +165,7 @@ class Perplexity(keras.metrics.Metric):
     def result(self):
         if self._number_of_samples == 0:
             return 0.0
-        perplexity_score = tf.exp(
+        perplexity_score = ops.exp(
             self._aggregate_crossentropy / self._number_of_samples
         )
         return perplexity_score

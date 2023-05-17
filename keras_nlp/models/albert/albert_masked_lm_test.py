@@ -20,17 +20,18 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_masked_lm import AlbertMaskedLM
 from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
     AlbertMaskedLMPreprocessor,
 )
 from keras_nlp.models.albert.albert_tokenizer import AlbertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class AlbertMaskedLMTest(TestCase):
     def setUp(self):
         # Setup model.
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -85,14 +86,12 @@ class AlbertMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             preprocessor=None,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "quick brown fox",
-                "eagle flew over fox",
-                "the eagle flew quick",
-                "a brown eagle",
-            ]
-        )
+        self.raw_batch = [
+            "quick brown fox",
+            "eagle flew over fox",
+            "the eagle flew quick",
+            "a brown eagle",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)[0]
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch

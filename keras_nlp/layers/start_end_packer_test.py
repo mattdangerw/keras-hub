@@ -15,13 +15,15 @@
 """Tests for Start End Packer layer."""
 
 
+import pytest
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.start_end_packer import StartEndPacker
+from keras_nlp.tests.test_case import TestCase
 
 
-class StartEndPackerTest(tf.test.TestCase):
+class StartEndPackerTest(TestCase):
     def test_dense_input(self):
         input_data = tf.constant([5, 6, 7])
         start_end_packer = StartEndPacker(sequence_length=5)
@@ -130,13 +132,14 @@ class StartEndPackerTest(tf.test.TestCase):
         with self.assertRaises(ValueError):
             StartEndPacker(sequence_length=5, start_value=1.0)
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.ragged.constant([[5, 6, 7], [8, 9, 10, 11]])
         start_end_packer = StartEndPacker(
             sequence_length=7, start_value=1, end_value=2, pad_value=3
         )
 
-        inputs = keras.Input(dtype="int32", shape=())
+        inputs = keras.Input(dtype="int32", shape=(None,))
         outputs = start_end_packer(inputs)
         model = keras.Model(inputs, outputs)
         model_output = model(input_data)

@@ -18,15 +18,16 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
 from keras_nlp.models.bert.bert_tokenizer import BertTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class BertMaskedLMPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
         self.vocab += ["THE", "QUICK", "BROWN", "FOX"]
@@ -128,8 +129,8 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(sw, [0.0, 0.0, 0.0, 0.0])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
@@ -140,11 +141,12 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
-        outputs = self.preprocessor(inputs)
+        outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
@@ -153,6 +155,6 @@ class BertMaskedLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         model.save(path, save_format=save_format, **kwargs)
 
         restored_model = keras.models.load_model(path)
-        outputs = model(input_data)[0]["token_ids"]
-        restored_outputs = restored_model(input_data)[0]["token_ids"]
+        outputs = model(input_data)["token_ids"]
+        restored_outputs = restored_model(input_data)["token_ids"]
         self.assertAllEqual(outputs, restored_outputs)

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for XLM-RoBERTa preprocessor layer."""
-
 import io
 import os
 
@@ -21,17 +20,18 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_preprocessor import (
     XLMRobertaPreprocessor,
 )
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaPreprocessorTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -134,8 +134,8 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
             self.preprocessor(ambiguous_input)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
@@ -146,6 +146,7 @@ class XLMRobertaPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
         inputs = keras.Input(dtype="string", shape=())

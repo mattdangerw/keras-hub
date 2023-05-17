@@ -18,17 +18,18 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_masked_lm import RobertaMaskedLM
 from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
     RobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.roberta.roberta_tokenizer import RobertaTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
+class RobertaMaskedLMTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<s>": 0,
@@ -73,12 +74,10 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
             preprocessor=None,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                " airplane at airport",
-                " the airplane is the best",
-            ]
-        )
+        self.raw_batch = [
+            " airplane at airport",
+            " the airplane is the best",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
             self.raw_batch
@@ -99,8 +98,8 @@ class RobertaMaskedLMTest(tf.test.TestCase, parameterized.TestCase):
         self.masked_lm.fit(self.preprocessed_dataset)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.masked_lm)
-        new_classifier = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.masked_lm)
+        new_classifier = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_classifier.get_config(),
             self.masked_lm.get_config(),

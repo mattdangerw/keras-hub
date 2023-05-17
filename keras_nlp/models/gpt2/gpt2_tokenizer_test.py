@@ -13,18 +13,18 @@
 # limitations under the License.
 
 """Tests for GPT-2 preprocessing layers."""
-
 import os
 
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.gpt2.gpt2_tokenizer import GPT2Tokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class GPT2TokenizerTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<|endoftext|>": 0,
@@ -75,7 +75,7 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [1, 2, 3, 1, 4, 0])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[1, 2, 3, 1, 4], [5, 6, 7, 8, 9]])
 
@@ -92,8 +92,8 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
             GPT2Tokenizer(vocabulary=["a", "b", "c"], merges=[])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
@@ -104,6 +104,7 @@ class GPT2TokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

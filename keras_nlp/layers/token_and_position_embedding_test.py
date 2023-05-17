@@ -15,16 +15,17 @@
 
 import os
 
-import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.layers.token_and_position_embedding import (
     TokenAndPositionEmbedding,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
+class TokenAndPositionEmbeddingTest(TestCase):
     def test_get_config_and_from_config(self):
         token_and_position_embed = TokenAndPositionEmbedding(
             vocabulary_size=5,
@@ -68,8 +69,8 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs, outputs)
 
-        input_data = tf.ones((2, sequence_length), dtype="int32")
-        expected_output_data = tf.ones((2, sequence_length, embedding_dim)) * 2
+        input_data = ops.ones((2, sequence_length), dtype="int32")
+        expected_output_data = ops.ones((2, sequence_length, embedding_dim)) * 2
         output_data = model.predict(input_data)
         self.assertAllClose(output_data, expected_output_data)
 
@@ -80,7 +81,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
             embedding_dim=3,
             mask_zero=True,
         )
-        input_data = tf.constant([[1, 0], [1, 0]])
+        input_data = ops.array([[1, 0], [1, 0]])
         mask = input_data != 0
         outputs = test_layer(input_data)
         self.assertAllEqual(outputs._keras_mask, mask)
@@ -102,7 +103,7 @@ class TokenAndPositionEmbeddingTest(tf.test.TestCase, parameterized.TestCase):
         outputs = test_layer(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
-        data = tf.zeros(shape=[2, sequence_length])
+        data = ops.zeros(shape=[2, sequence_length])
         model(data)
 
         path = os.path.join(self.get_temp_dir(), filename)

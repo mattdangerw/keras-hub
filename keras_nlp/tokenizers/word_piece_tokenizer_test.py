@@ -14,10 +14,11 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers.word_piece_tokenizer import WordPieceTokenizer
 
 
@@ -156,6 +157,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         call_output = tokenizer(input_data)
         self.assertAllEqual(call_output, [1, 2, 3, 4, 5, 6])
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(["the quick brown fox"])
         vocab_data = ["[UNK]", "the", "qu", "##ick", "br", "##own", "fox"]
@@ -211,6 +213,7 @@ class WordPieceTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["quick brOWN whale"])
         vocab_data = ["@UNK@", "qu", "@@ick", "br", "@@OWN", "fox"]

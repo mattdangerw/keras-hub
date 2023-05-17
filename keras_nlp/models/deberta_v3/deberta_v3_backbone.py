@@ -16,9 +16,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
 from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
@@ -26,6 +25,7 @@ from keras_nlp.models.deberta_v3.disentangled_attention_encoder import (
 )
 from keras_nlp.models.deberta_v3.relative_embedding import RelativeEmbedding
 from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.tensor_utils import assert_tf_backend
 
 
 def deberta_kernel_initializer(stddev=0.02):
@@ -111,6 +111,8 @@ class DebertaV3Backbone(Backbone):
         bucket_size=256,
         **kwargs,
     ):
+        assert_tf_backend(self.__class__.__name__)
+
         # Inputs
         token_id_input = keras.Input(
             shape=(None,), dtype="int32", name="token_ids"

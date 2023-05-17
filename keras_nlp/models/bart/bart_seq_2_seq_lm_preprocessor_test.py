@@ -13,21 +13,21 @@
 # limitations under the License.
 
 """Tests for BART preprocessor layer."""
-
 import os
 
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.bart.bart_tokenizer import BartTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class BartSeq2SeqLMPreprocessorTest(TestCase):
     def setUp(self):
         vocab = {
             "<s>": 0,
@@ -149,8 +149,8 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(x, " kohli is the best")
 
     def test_serialization(self):
-        new_preprocessor = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.preprocessor)
         )
         self.assertEqual(
             new_preprocessor.get_config(), self.preprocessor.get_config()
@@ -161,17 +161,22 @@ class BartSeq2SeqLMPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = {
-            "encoder_text": tf.constant(" airplane at airport"),
-            "decoder_text": tf.constant(" kohli is the best"),
+            "encoder_text": tf.constant([" airplane at airport"]),
+            "decoder_text": tf.constant([" kohli is the best"]),
         }
 
         inputs = {
-            "encoder_text": keras.Input(dtype="string", shape=()),
-            "decoder_text": keras.Input(dtype="string", shape=()),
+            "encoder_text": keras.Input(
+                dtype="string", name="encoder_text", shape=()
+            ),
+            "decoder_text": keras.Input(
+                dtype="string", name="decoder_text", shape=()
+            ),
         }
-        outputs = self.preprocessor(inputs)
+        outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)

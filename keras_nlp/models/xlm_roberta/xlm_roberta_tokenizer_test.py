@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """Tests for XLM-RoBERTa tokenizer."""
-
 import io
 import os
 
@@ -21,14 +20,15 @@ import pytest
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_tokenizer import (
     XLMRobertaTokenizer,
 )
+from keras_nlp.tests.test_case import TestCase
 
 
-class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
+class XLMRobertaTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
         vocab_data = tf.data.Dataset.from_tensor_slices(
@@ -53,7 +53,7 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [4, 9, 5, 7])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
 
@@ -64,9 +64,9 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(output, [4, 9, 5, 7, 3])
 
     def test_detokenize(self):
-        input_data = tf.constant([[4, 9, 5, 7]])
+        input_data = [[4, 9, 5, 7]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["brown round earth is"]))
+        self.assertEqual(output, ["brown round earth is"])
 
     def test_vocabulary(self):
         vocabulary = self.tokenizer.get_vocabulary()
@@ -109,8 +109,8 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         self.assertEqual(self.tokenizer.token_to_id("<pad>"), 1)
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.tokenizer)
-        new_tokenizer = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.tokenizer)
+        new_tokenizer = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_tokenizer.get_config(),
             self.tokenizer.get_config(),
@@ -121,6 +121,7 @@ class XLMRobertaTokenizerTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

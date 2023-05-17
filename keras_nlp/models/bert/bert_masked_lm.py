@@ -15,9 +15,8 @@
 
 import copy
 
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
@@ -26,7 +25,6 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
 )
 from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.task import Task
-from keras_nlp.utils.keras_utils import is_xla_compatible
 from keras_nlp.utils.python_utils import classproperty
 
 
@@ -108,13 +106,14 @@ class BertMaskedLM(Task):
         preprocessor=None,
         **kwargs,
     ):
-        inputs = {
-            **backbone.input,
-            "mask_positions": keras.Input(
-                shape=(None,), dtype="int32", name="mask_positions"
-            ),
-        }
-        backbone_outputs = backbone(backbone.input)
+        inputs = backbone.input
+        backbone_outputs = backbone(
+            {
+                "token_ids": inputs["token_ids"],
+                "segment_ids": inputs["segment_ids"],
+                "padding_mask": inputs["padding_mask"],
+            }
+        )
         outputs = MaskedLMHead(
             vocabulary_size=backbone.vocabulary_size,
             embedding_weights=backbone.token_embedding.embeddings,
@@ -137,7 +136,7 @@ class BertMaskedLM(Task):
             loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             optimizer=keras.optimizers.Adam(5e-5),
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=is_xla_compatible(self),
+            jit_compile=True,
         )
 
     @classproperty

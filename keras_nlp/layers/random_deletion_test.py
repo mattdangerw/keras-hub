@@ -14,12 +14,13 @@
 """Tests for RandomDeletion Layer."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.random_deletion import RandomDeletion
+from keras_nlp.tests.test_case import TestCase
 
 
-class RandomDeletionTest(tf.test.TestCase):
+class RandomDeletionTest(TestCase):
     def test_shape_and_output_from_word_deletion(self):
         keras.utils.set_random_seed(1337)
         inputs = ["Hey I like", "Keras and Tensorflow"]
@@ -183,15 +184,3 @@ class RandomDeletionTest(tf.test.TestCase):
         output = ds.take(1).get_single_element()
         exp_output = [[b"Hey", b"I", b"like"], [b"and", b"Tensorflow"]]
         self.assertAllEqual(output, exp_output)
-
-    def test_functional_model(self):
-        keras.utils.set_random_seed(1337)
-        input_data = tf.constant(["Hey I like", "Keras and Tensorflow"])
-        augmenter = RandomDeletion(rate=0.4, max_deletions=1, seed=42)
-        inputs = tf.keras.Input(dtype="string", shape=())
-        outputs = augmenter(tf.strings.split(inputs))
-        model = tf.keras.Model(inputs, outputs)
-        model_output = model(input_data)
-        self.assertAllEqual(
-            model_output, [[b"I", b"like"], [b"and", b"Tensorflow"]]
-        )

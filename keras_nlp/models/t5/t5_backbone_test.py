@@ -18,12 +18,15 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.t5.t5_backbone import T5Backbone
+from keras_nlp.tests.test_case import TestCase
 
 
-class T5Test(tf.test.TestCase, parameterized.TestCase):
+@pytest.mark.tf_only
+class T5Test(TestCase):
     def setUp(self):
         self.backbone = T5Backbone(
             vocabulary_size=4,
@@ -35,16 +38,16 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
         self.batch_size = 2
         seq_length = 3
         self.input_batch = {
-            "encoder_token_ids": tf.ones(
+            "encoder_token_ids": ops.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "encoder_padding_mask": tf.ones(
+            "encoder_padding_mask": ops.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "decoder_token_ids": tf.ones(
+            "decoder_token_ids": ops.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
-            "decoder_padding_mask": tf.ones(
+            "decoder_padding_mask": ops.ones(
                 (self.batch_size, seq_length), dtype="int32"
             ),
         }
@@ -68,16 +71,16 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
     def test_variable_sequence_length_call_t5(self):
         for seq_length in (2, 3, 4):
             input_data = {
-                "encoder_token_ids": tf.ones(
+                "encoder_token_ids": ops.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "encoder_padding_mask": tf.ones(
+                "encoder_padding_mask": ops.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "decoder_token_ids": tf.ones(
+                "decoder_token_ids": ops.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
-                "decoder_padding_mask": tf.ones(
+                "decoder_padding_mask": ops.ones(
                     (self.batch_size, seq_length), dtype="int32"
                 ),
             }
@@ -90,8 +93,8 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
         self.backbone.predict(self.input_dataset)
 
     def test_serialization(self):
-        new_backbone = keras.utils.deserialize_keras_object(
-            keras.utils.serialize_keras_object(self.backbone)
+        new_backbone = keras.saving.deserialize_keras_object(
+            keras.saving.serialize_keras_object(self.backbone)
         )
         self.assertEqual(new_backbone.get_config(), self.backbone.get_config())
 
@@ -119,7 +122,7 @@ class T5Test(tf.test.TestCase, parameterized.TestCase):
 
 @pytest.mark.tpu
 @pytest.mark.usefixtures("tpu_test_class")
-class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
+class T5BackboneTPUTest(TestCase):
     def setUp(self):
         with self.tpu_strategy.scope():
             self.backbone = T5Backbone(
@@ -130,8 +133,8 @@ class T5BackboneTPUTest(tf.test.TestCase, parameterized.TestCase):
                 intermediate_dim=4,
             )
         self.input_batch = {
-            "token_ids": tf.ones((8, 4), dtype="int32"),
-            "padding_mask": tf.ones((8, 4), dtype="int32"),
+            "token_ids": ops.ones((8, 4), dtype="int32"),
+            "padding_mask": ops.ones((8, 4), dtype="int32"),
         }
         self.input_dataset = tf.data.Dataset.from_tensor_slices(
             self.input_batch

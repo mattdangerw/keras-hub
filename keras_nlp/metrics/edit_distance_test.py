@@ -15,12 +15,12 @@
 """Tests for EditDistance."""
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.metrics.edit_distance import EditDistance
+from keras_nlp.tests.test_case import TestCase
 
 
-class EditDistanceTest(tf.test.TestCase):
+class EditDistanceTest(TestCase):
     def test_initialization(self):
         edit_distance = EditDistance()
         result = edit_distance.result()
@@ -104,38 +104,6 @@ class EditDistanceTest(tf.test.TestCase):
 
         edit_distance_val = edit_distance(y_true, y_pred)
         self.assertAlmostEqual(edit_distance_val, 5.5, delta=1e-3)
-
-    def test_model_compile_normalize(self):
-        inputs = keras.Input(shape=(None,), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
-
-        model.compile(metrics=[EditDistance()])
-
-        x = tf.strings.split(
-            ["the tiny little cat was found under the big funny bed"]
-        )
-        y = tf.strings.split(["the cat was found under the bed"])
-
-        output = model.evaluate(y, x, return_dict=True)
-
-        self.assertAlmostEqual(output["edit_distance"], 0.364, delta=1e-3)
-
-    def test_model_compile_normalize_false(self):
-        inputs = keras.Input(shape=(None,), dtype="string")
-        outputs = tf.strings.lower(inputs)
-        model = keras.Model(inputs, outputs)
-
-        model.compile(metrics=[EditDistance(normalize=False)])
-
-        x = tf.strings.split(
-            ["the tiny little cat was found under the big funny bed"]
-        )
-        y = tf.strings.split(["the cat was found under the bed"])
-
-        output = model.evaluate(y, x, return_dict=True)
-
-        self.assertAlmostEqual(output["edit_distance"], 4.0, delta=1e-3)
 
     def test_reset_state_normalize(self):
         edit_distance = EditDistance()

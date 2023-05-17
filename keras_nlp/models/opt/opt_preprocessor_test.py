@@ -13,19 +13,19 @@
 # limitations under the License.
 
 """Tests for OPT preprocessor layer."""
-
 import os
 
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.opt.opt_preprocessor import OPTPreprocessor
 from keras_nlp.models.opt.opt_tokenizer import OPTTokenizer
+from keras_nlp.tests.test_case import TestCase
 
 
-class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
+class OPTPreprocessorTest(TestCase):
     def setUp(self):
         self.vocab = {
             "<pad>": 0,
@@ -105,8 +105,8 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         self.assertAllEqual(x["token_ids"], [1, 3, 4, 1])
 
     def test_serialization(self):
-        config = keras.utils.serialize_keras_object(self.preprocessor)
-        new_preprocessor = keras.utils.deserialize_keras_object(config)
+        config = keras.saving.serialize_keras_object(self.preprocessor)
+        new_preprocessor = keras.saving.deserialize_keras_object(config)
         self.assertEqual(
             new_preprocessor.get_config(),
             self.preprocessor.get_config(),
@@ -117,6 +117,7 @@ class OPTPreprocessorTest(tf.test.TestCase, parameterized.TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 
