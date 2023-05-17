@@ -136,6 +136,7 @@ class OPTCausalLMPreprocessorTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

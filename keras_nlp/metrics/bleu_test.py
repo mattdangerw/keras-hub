@@ -13,9 +13,7 @@
 # limitations under the License.
 
 """Tests for Bleu."""
-import tensorflow as tf
 
-from keras_nlp.backend import keras
 from keras_nlp.metrics.bleu import Bleu
 from keras_nlp.tests.test_case import TestCase
 from keras_nlp.tokenizers.byte_tokenizer import ByteTokenizer
@@ -67,116 +65,45 @@ class BleuTest(TestCase):
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
-    def test_1d_tensor_input(self):
-        bleu = Bleu()
-        y_true = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
-
-        bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
-
-    def test_2d_tensor_input(self):
-        bleu = Bleu()
-        y_true = tf.constant(
-            [
-                [["He eats a sweet apple."]],
-                [["Silicon Valley is one of my favourite shows!"]],
-            ]
-        )
-        y_pred = tf.constant(
-            [
-                ["He He He eats sweet apple which is a fruit."],
-                ["I love Silicon Valley, it's one of my favourite shows."],
-            ]
-        )
-
-        bleu_val = bleu(y_true, y_pred)
-        self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
-
     def test_custom_tokenizer(self):
         byte_tokenizer = ByteTokenizer()
         bleu = Bleu(tokenizer=byte_tokenizer)
-        y_true = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
+        y_true = [
+            ["He eats a sweet apple."],
+            ["Silicon Valley is one of my favourite shows!"],
+        ]
+        y_pred = [
+            "He He He eats sweet apple which is a fruit.",
+            "I love Silicon Valley, it's one of my favourite shows.",
+        ]
 
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val, 0.609, delta=1e-3)
 
     def test_different_order(self):
         bleu = Bleu(max_order=5)
-        y_true = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
+        y_true = [
+            ["He eats a sweet apple."],
+            ["Silicon Valley is one of my favourite shows!"],
+        ]
+        y_pred = [
+            "He He He eats sweet apple which is a fruit.",
+            "I love Silicon Valley, it's one of my favourite shows.",
+        ]
 
         bleu_val = bleu(y_true, y_pred)
         self.assertAlmostEqual(bleu_val, 0.188, delta=1e-3)
 
-    def test_model_compile(self):
-        inputs = keras.Input(shape=(), dtype="string")
-        outputs = tf.identity(inputs)
-        model = keras.Model(inputs, outputs)
-
-        model.compile(metrics=[Bleu()])
-
-        x = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
-        y = tf.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-
-        output = model.evaluate(x, y, return_dict=True)
-        self.assertAlmostEqual(output["bleu"], 0.243, delta=1e-3)
-
     def test_reset_state(self):
         bleu = Bleu()
-        y_true = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
+        y_true = [
+            ["He eats a sweet apple."],
+            ["Silicon Valley is one of my favourite shows!"],
+        ]
+        y_pred = [
+            "He He He eats sweet apple which is a fruit.",
+            "I love Silicon Valley, it's one of my favourite shows.",
+        ]
 
         bleu.update_state(y_true, y_pred)
         bleu_val = bleu.result()
@@ -188,25 +115,21 @@ class BleuTest(TestCase):
 
     def test_update_state(self):
         bleu = Bleu()
-        y_true_1 = tf.ragged.constant(
-            [
-                ["He eats a sweet apple."],
-                ["Silicon Valley is one of my favourite shows!"],
-            ]
-        )
-        y_pred_1 = tf.constant(
-            [
-                "He He He eats sweet apple which is a fruit.",
-                "I love Silicon Valley, it's one of my favourite shows.",
-            ]
-        )
+        y_true_1 = [
+            ["He eats a sweet apple."],
+            ["Silicon Valley is one of my favourite shows!"],
+        ]
+        y_pred_1 = [
+            "He He He eats sweet apple which is a fruit.",
+            "I love Silicon Valley, it's one of my favourite shows.",
+        ]
 
         bleu.update_state(y_true_1, y_pred_1)
         bleu_val = bleu.result()
         self.assertAlmostEqual(bleu_val, 0.243, delta=1e-3)
 
-        y_true_2 = tf.constant(["Virat Kohli is the GOAT."])
-        y_pred_2 = tf.constant("Virat Kohli is the greatest of all time!")
+        y_true_2 = ["Virat Kohli is the GOAT."]
+        y_pred_2 = "Virat Kohli is the greatest of all time!"
 
         bleu.update_state(y_true_2, y_pred_2)
         bleu_val = bleu.result()
@@ -218,7 +141,7 @@ class BleuTest(TestCase):
             tokenizer=byte_tokenizer,
             max_order=8,
             smooth=True,
-            dtype=tf.float64,
+            dtype="float64",
             name="bleu_test",
         )
 

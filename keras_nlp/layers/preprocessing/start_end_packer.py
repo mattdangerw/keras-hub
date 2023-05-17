@@ -124,6 +124,9 @@ class StartEndPacker(keras.layers.Layer):
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
 
         self.sequence_length = sequence_length
 
@@ -223,3 +226,8 @@ class StartEndPacker(keras.layers.Layer):
             }
         )
         return config
+
+    def compute_output_shape(self, inputs_shape):
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = self.sequence_length
+        return tuple(inputs_shape)

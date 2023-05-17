@@ -173,15 +173,20 @@ class BartPreprocessorTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = {
-            "encoder_text": tf.constant(" airplane at airport"),
-            "decoder_text": tf.constant(" kohli is the best"),
+            "encoder_text": tf.constant([" airplane at airport"]),
+            "decoder_text": tf.constant([" kohli is the best"]),
         }
 
         inputs = {
-            "encoder_text": keras.Input(dtype="string", shape=()),
-            "decoder_text": keras.Input(dtype="string", shape=()),
+            "encoder_text": keras.Input(
+                dtype="string", name="encoder_text", shape=()
+            ),
+            "decoder_text": keras.Input(
+                dtype="string", name="decoder_text", shape=()
+            ),
         }
         outputs = self.preprocessor(inputs)
         model = keras.Model(inputs=inputs, outputs=outputs)

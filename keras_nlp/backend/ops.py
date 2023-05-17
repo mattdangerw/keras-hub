@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras_core
+import tensorflow as tf
+
 from keras_nlp.backend.config import multi_backend
 
 if multi_backend():
@@ -22,3 +25,17 @@ else:
     from keras_core.src.backend.tensorflow.math import *  # noqa: F403, F401
     from keras_core.src.backend.tensorflow.nn import *  # noqa: F403, F401
     from keras_core.src.backend.tensorflow.numpy import *  # noqa: F403, F401
+
+
+# Move this workaround into keras-core.
+if keras_core.config.backend() == "tensorflow" or not multi_backend():
+
+    def take_along_axis(x, indices, axis=None):
+        # An incomplete `take_along_axis` that works with dynamic shapes
+        # properly.
+        if axis < 0:
+            axis = axis + indices.shape.rank
+        if axis + 1 < indices.shape.rank:
+            squeeze_axes = list(range(axis + 1, indices.shape.rank))
+            indices = tf.squeeze(indices, squeeze_axes)
+        return tf.gather(x, indices, batch_dims=axis)

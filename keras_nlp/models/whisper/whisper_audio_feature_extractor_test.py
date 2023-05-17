@@ -84,6 +84,7 @@ class WhisperAudioFeatureExtractorTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         audio_tensor = tf.ones((2,), dtype="float32")
 

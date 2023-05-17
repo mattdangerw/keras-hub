@@ -103,6 +103,13 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
         )
         self.supports_masking = self.token_embedding.supports_masking
 
+    def build(self, input_shape):
+        # TODO: why is this coming in as a list?
+        input_shape = tuple(input_shape)
+        self.token_embedding.build(input_shape)
+        self.position_embedding.build(input_shape + (self.embedding_dim,))
+        self.built = True
+
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -129,3 +136,6 @@ class TokenAndPositionEmbedding(keras.layers.Layer):
 
     def compute_mask(self, inputs, mask=None):
         return self.token_embedding.compute_mask(inputs, mask=mask)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape + (self.embedding_dim,)

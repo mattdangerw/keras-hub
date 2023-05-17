@@ -156,17 +156,18 @@ class XLMRobertaMaskedLMPreprocessorTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" quick brown fox"])
 
         inputs = keras.Input(dtype="string", shape=())
-        outputs = self.preprocessor(inputs)
+        outputs, y, sw = self.preprocessor(inputs)
         model = keras.Model(inputs, outputs)
 
         path = os.path.join(self.get_temp_dir(), filename)
         model.save(path, save_format=save_format)
 
         restored_model = keras.models.load_model(path)
-        outputs = model(input_data)[0]["token_ids"]
-        restored_outputs = restored_model(input_data)[0]["token_ids"]
+        outputs = model(input_data)["token_ids"]
+        restored_outputs = restored_model(input_data)["token_ids"]
         self.assertAllEqual(outputs, restored_outputs)

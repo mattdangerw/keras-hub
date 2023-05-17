@@ -61,6 +61,12 @@ class Tokenizer(keras.layers.Layer):
     ```
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
     def __new__(cls, *args, **kwargs):
         # Wrap the `tokenize` and `detokenize` methods so they route through
         # __call__. This is needed for functional model support.

@@ -22,6 +22,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 from keras_nlp.models.xlm_roberta.xlm_roberta_classifier import (
     XLMRobertaClassifier,
@@ -71,15 +72,13 @@ class XLMRobertaClassifierTest(TestCase):
             hidden_dim=4,
         )
 
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the slow brown fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the slow brown fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -93,7 +92,7 @@ class XLMRobertaClassifierTest(TestCase):
         # Assert predictions match.
         self.assertAllClose(preds1, preds2)
         # Assert valid softmax output.
-        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
+        self.assertAllClose(ops.sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)

@@ -24,6 +24,16 @@ class Preprocessor(keras.layers.Layer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._tokenizer = None
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
+    def __setattr__(self, name, value):
+        # Work around torch setattr for properties.
+        if name in ["tokenizer"]:
+            object.__setattr__(self, name, value)
+        else:
+            super().__setattr__(name, value)
 
     @property
     def tokenizer(self):

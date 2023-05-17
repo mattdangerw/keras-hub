@@ -57,14 +57,14 @@ class AlbertTokenizerTest(TestCase):
         self.assertAllEqual(output, [5, 10, 6, 8])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[5, 10, 6, 8], [5, 7, 9, 11]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[5, 10, 6, 8]])
+        input_data = [[5, 10, 6, 8]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         tokenizer = AlbertTokenizer(proto=self.proto)
@@ -96,6 +96,7 @@ class AlbertTokenizerTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

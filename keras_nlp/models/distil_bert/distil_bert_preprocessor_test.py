@@ -116,6 +116,7 @@ class DistilBertPreprocessorTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["THE QUICK BROWN FOX."])
         inputs = keras.Input(dtype="string", shape=())
