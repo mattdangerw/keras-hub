@@ -53,7 +53,7 @@ class XLMRobertaTokenizerTest(TestCase):
         self.assertAllEqual(output, [4, 9, 5, 7])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[4, 9, 5, 7], [4, 6, 8, 10]])
 
@@ -64,9 +64,9 @@ class XLMRobertaTokenizerTest(TestCase):
         self.assertAllEqual(output, [4, 9, 5, 7, 3])
 
     def test_detokenize(self):
-        input_data = tf.constant([[4, 9, 5, 7]])
+        input_data = [[4, 9, 5, 7]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["brown round earth is"]))
+        self.assertEqual(output, ["brown round earth is"])
 
     def test_vocabulary(self):
         vocabulary = self.tokenizer.get_vocabulary()
@@ -121,6 +121,7 @@ class XLMRobertaTokenizerTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large  # Saving is slow, so mark these large.
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

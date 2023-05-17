@@ -134,6 +134,11 @@ class MultiSegmentPacker(keras.layers.Layer):
         assert_tf_text_installed(self.__class__.__name__)
 
         super().__init__(**kwargs)
+
+        self._convert_input_args = False
+        self._allow_non_tensor_positional_args = True
+        self.built = True
+
         self.sequence_length = sequence_length
         if truncate not in ("round_robin", "waterfall"):
             raise ValueError(
@@ -296,3 +301,10 @@ class MultiSegmentPacker(keras.layers.Layer):
             segment_ids = tf.squeeze(segment_ids, 0)
 
         return (token_ids, segment_ids)
+
+    def compute_output_shape(self, inputs_shape):
+        if isinstance(inputs_shape[0], tuple):
+            inputs_shape = inputs_shape[0]
+        inputs_shape = list(inputs_shape)
+        inputs_shape[-1] = self.sequence_length
+        return tuple(inputs_shape)

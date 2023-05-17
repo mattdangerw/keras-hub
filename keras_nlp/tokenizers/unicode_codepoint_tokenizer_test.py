@@ -14,6 +14,7 @@
 
 import os
 
+import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
@@ -248,6 +249,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         for i in range(output.shape[0]):
             self.assertAllEqual(output[i], exp_output[i])
 
+    @pytest.mark.tf_only
     def test_functional_model(self):
         input_data = tf.constant(
             ["ninja", "samurai", "▀▁▂▃", "keras", "tensorflow"]
@@ -349,6 +351,7 @@ class UnicodeCodepointTokenizerTest(TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["ninjas and samurais", "time travel"])
 

@@ -26,6 +26,7 @@ from keras_nlp.models.f_net.f_net_tokenizer import FNetTokenizer
 from keras_nlp.tests.test_case import TestCase
 
 
+@pytest.mark.tf_only
 class FNetTokenizerTest(TestCase):
     def setUp(self):
         bytes_io = io.BytesIO()
@@ -57,14 +58,14 @@ class FNetTokenizerTest(TestCase):
         self.assertAllEqual(output, [2, 10, 6, 8])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant(["the quick brown fox", "the earth is round"])
+        input_data = ["the quick brown fox", "the earth is round"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[2, 10, 6, 8], [2, 7, 9, 11]])
 
     def test_detokenize(self):
-        input_data = tf.constant([[2, 10, 6, 8]])
+        input_data = [[2, 10, 6, 8]]
         output = self.tokenizer.detokenize(input_data)
-        self.assertEqual(output, tf.constant(["the quick brown fox"]))
+        self.assertEqual(output, ["the quick brown fox"])
 
     def test_vocabulary_size(self):
         tokenizer = FNetTokenizer(proto=self.proto)
@@ -96,6 +97,7 @@ class FNetTokenizerTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant(["the quick brown fox"])
 

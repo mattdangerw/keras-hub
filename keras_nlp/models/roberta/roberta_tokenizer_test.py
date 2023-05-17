@@ -60,7 +60,7 @@ class RobertaTokenizerTest(TestCase):
         self.assertAllEqual(output, [0, 3, 4, 5, 3, 6, 0, 1])
 
     def test_tokenize_batch(self):
-        input_data = tf.constant([" airplane at airport", " kohli is the best"])
+        input_data = [" airplane at airport", " kohli is the best"]
         output = self.tokenizer(input_data)
         self.assertAllEqual(output, [[3, 4, 5, 3, 6], [7, 8, 9, 10, 11]])
 
@@ -89,6 +89,7 @@ class RobertaTokenizerTest(TestCase):
         ("keras_format", "keras_v3", "model.keras"),
     )
     @pytest.mark.large
+    @pytest.mark.tf_only
     def test_saved_model(self, save_format, filename):
         input_data = tf.constant([" airplane at airport"])
 

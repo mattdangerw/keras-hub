@@ -20,6 +20,7 @@ import tensorflow as tf
 from absl.testing import parameterized
 
 from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
@@ -53,15 +54,13 @@ class BertClassifierTest(TestCase):
         )
 
         # Setup data.
-        self.raw_batch = tf.constant(
-            [
-                "the quick brown fox.",
-                "the slow brown fox.",
-            ]
-        )
+        self.raw_batch = [
+            "the quick brown fox.",
+            "the slow brown fox.",
+        ]
         self.preprocessed_batch = self.preprocessor(self.raw_batch)
         self.raw_dataset = tf.data.Dataset.from_tensor_slices(
-            (self.raw_batch, tf.ones((2,)))
+            (self.raw_batch, ops.ones((2,)))
         ).batch(2)
         self.preprocessed_dataset = self.raw_dataset.map(self.preprocessor)
 
@@ -75,7 +74,7 @@ class BertClassifierTest(TestCase):
         # Assert predictions match.
         self.assertAllClose(preds1, preds2)
         # Assert valid softmax output.
-        self.assertAllClose(tf.reduce_sum(preds2, axis=-1), [1.0, 1.0])
+        self.assertAllClose(ops.sum(preds2, axis=-1), [1.0, 1.0])
 
     def test_classifier_fit(self):
         self.classifier.fit(self.raw_dataset)
@@ -85,6 +84,7 @@ class BertClassifierTest(TestCase):
     def test_classifier_fit_no_xla(self):
         self.classifier.preprocessor = None
         self.classifier.compile(
+            optimizer="adam",
             loss="sparse_categorical_crossentropy",
             jit_compile=False,
         )
@@ -116,8 +116,8 @@ class BertClassifierTest(TestCase):
         ("tf_format", "tf", "model"),
         ("keras_format", "keras_v3", "model.keras"),
     )
-    @pytest.mark.large  # Saving is slow, so mark these large.
-    def test_saved_model(self, save_format, filename):
+    @pytest.mark.large
+    def test_saving_model(self, save_format, filename):
         model_output = self.classifier.predict(self.raw_batch)
         path = os.path.join(self.get_temp_dir(), filename)
         # Don't save traces in the tf format, we check compilation elsewhere.
@@ -125,7 +125,7 @@ class BertClassifierTest(TestCase):
         self.classifier.save(path, save_format=save_format, **kwargs)
         restored_model = keras.models.load_model(path)
 
-        # Check we got the real object back.
+        # Check we got the real object back
         self.assertIsInstance(restored_model, BertClassifier)
 
         # Check that output matches.
