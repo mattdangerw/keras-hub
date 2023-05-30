@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,13 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from keras_nlp.backend.config import multi_backend
 
-from keras_nlp import layers
-from keras_nlp import metrics
-from keras_nlp import models
-from keras_nlp import samplers
-from keras_nlp import tokenizers
-from keras_nlp import utils
+if multi_backend():
+    import keras_core as keras
+else:
+    from tensorflow import keras
 
-# This is the global source of truth for the version number.
-__version__ = "0.5.0.dev0"
+from keras_nlp.backend import ops
