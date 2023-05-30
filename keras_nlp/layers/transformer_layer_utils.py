@@ -15,7 +15,7 @@
 """ Utility functions for `TransformerEncoder` and `TransformerDecoder`."""
 
 from absl import logging
-from keras_core import operations as ops
+from keras_nlp.backend import ops
 
 
 def _check_masks_shapes(inputs, padding_mask, attention_mask):

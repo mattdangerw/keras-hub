@@ -17,8 +17,8 @@ from typing import Iterable
 from typing import List
 
 import tensorflow as tf
-from keras_core.utils.file_utils import get_file
 
+from keras_nlp.backend import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
@@ -466,7 +466,7 @@ class WordPieceTokenizer(tokenizer.Tokenizer):
             )
         metadata = cls.presets[preset]
 
-        vocabulary = get_file(
+        vocabulary = keras.utils.get_file(
             "vocab.txt",
             metadata["vocabulary_url"],
             cache_subdir=os.path.join("models", preset),

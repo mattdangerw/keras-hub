@@ -14,8 +14,8 @@
 
 """Transformer decoder block implementation based on `keras.layers.Layer`."""
 
-import keras_core as keras
-from keras_core import operations as ops
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.cached_multi_head_attention import (

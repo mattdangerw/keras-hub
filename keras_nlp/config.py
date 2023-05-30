@@ -1,16 +1,3 @@
-# Copyright 2023 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import json
 import os
 
@@ -26,7 +13,7 @@ else:
         _keras_base_dir = "/tmp"
     _keras_dir = os.path.join(_keras_base_dir, ".keras")
 
-# Attempt to read KerasNLP config file.
+# Attempt to read Keras config file.
 _config_path = os.path.expanduser(os.path.join(_keras_dir, "keras-nlp.json"))
 if os.path.exists(_config_path):
     try:
@@ -34,7 +21,6 @@ if os.path.exists(_config_path):
             _config = json.load(f)
     except ValueError:
         _config = {}
-    _MULTI_BACKEND = _config.get("multi_backend", _MULTI_BACKEND)
 
 # Save config file, if possible.
 if not os.path.exists(_keras_dir):
@@ -56,11 +42,8 @@ if not os.path.exists(_config_path):
         # Except permission denied.
         pass
 
-# Set Keras backend based on KERAS_NLP_MULTI_BACKEND flag, if applicable.
+# Set backend based on KERAS_BACKEND flag, if applicable.
 if "KERAS_NLP_MULTI_BACKEND" in os.environ:
-    if os.environ["KERAS_NLP_MULTI_BACKEND"]:
-        _MULTI_BACKEND = True
-
-
-def multi_backend():
-    return _MULTI_BACKEND
+    _backend = os.environ["KERAS_NLP_MULTI_BACKEND"]
+    if _backend:
+        _BACKEND = _backend

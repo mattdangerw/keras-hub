@@ -16,7 +16,7 @@
 
 import copy
 
-import keras_core as keras
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.position_embedding import PositionEmbedding
@@ -37,7 +37,7 @@ class Pooler(keras.layers.Layer):
         return inputs[:, 0, :]
 
     def compute_output_shape(self, input_shape):
-        return input_shape
+        return (input_shape[0], input_shape[2])
 
 
 @keras_nlp_export("keras_nlp.models.BertBackbone")

@@ -15,7 +15,7 @@
 
 import copy
 
-import keras_core as keras
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.models.bert.bert_backbone import BertBackbone

@@ -18,8 +18,8 @@ import os
 from typing import List
 
 import tensorflow as tf
-from keras_core.utils.file_utils import get_file
 
+from keras_nlp.backend import keras
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.tokenizers import tokenizer
 from keras_nlp.utils.python_utils import classproperty
@@ -258,7 +258,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             )
         metadata = cls.presets[preset]
 
-        spm_proto = get_file(
+        spm_proto = keras.utils.get_file(
             "vocab.spm",
             metadata["spm_proto_url"],
             cache_subdir=os.path.join("models", preset),

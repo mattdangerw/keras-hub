@@ -15,19 +15,17 @@
 
 import os
 
-import keras_core as keras
+from keras_nlp.backend import keras
 import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from keras_core.utils.traceback_utils import disable_traceback_filtering
 
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 
 class BertBackboneTest(tf.test.TestCase, parameterized.TestCase):
     def setUp(self):
-        disable_traceback_filtering()
         self.backbone = BertBackbone(
             vocabulary_size=10,
             num_layers=2,

@@ -15,7 +15,7 @@
 
 import os
 
-import keras_core as keras
+from keras_nlp.backend import keras
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized

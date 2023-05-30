@@ -15,11 +15,8 @@
 
 import os
 
-import keras_core as keras
+from keras_nlp.backend import keras
 import tensorflow as tf
-from keras_core.utils import io_utils
-from keras_core.utils import text_rendering
-from keras_core.utils.file_utils import get_file
 
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
@@ -192,7 +189,7 @@ class Task(PipelineModel):
         if not load_weights:
             return model
 
-        weights = get_file(
+        weights = keras.utils.get_file(
             "model.h5",
             metadata["weights_url"],
             cache_subdir=os.path.join("models", preset),
@@ -233,31 +230,31 @@ class Task(PipelineModel):
     ):
         """Override `model.summary()` to show a preprocessor if set."""
         # Defaults are copied from core Keras; we should try to stay in sync.
-        line_length = line_length or 108
-        positions = positions or [0.3, 0.56, 0.70, 1.0]
-        if print_fn is None:
-            print_fn = io_utils.print_msg
+        # line_length = line_length or 108
+        # positions = positions or [0.3, 0.56, 0.70, 1.0]
+        # if print_fn is None:
+        #     print_fn = io_utils.print_msg
 
-        if self.preprocessor:
-            tokenizer = self.preprocessor.tokenizer
-            rows = [
-                [
-                    f"{tokenizer.name} ({tokenizer.__class__.__name__})",
-                    f"{tokenizer.vocabulary_size()}",
-                ],
-            ]
-            title = f' Preprocessor: "{self.preprocessor.name}"'
-            print_fn(text_rendering.highlight_msg(title))
-            table = text_rendering.TextTable(
-                header=["Tokenizer (type)", "Vocab #"],
-                rows=rows,
-                positions=[0.56, 1.0],
-                # Left align layer name, center-align everything else
-                alignments=["left", "center"],
-                max_line_length=line_length,
-            )
-            table_str = table.make()
-            print_fn(table_str)
+        # if self.preprocessor:
+        #     tokenizer = self.preprocessor.tokenizer
+        #     rows = [
+        #         [
+        #             f"{tokenizer.name} ({tokenizer.__class__.__name__})",
+        #             f"{tokenizer.vocabulary_size()}",
+        #         ],
+        #     ]
+        #     title = f' Preprocessor: "{self.preprocessor.name}"'
+        #     print_fn(text_rendering.highlight_msg(title))
+        #     table = text_rendering.TextTable(
+        #         header=["Tokenizer (type)", "Vocab #"],
+        #         rows=rows,
+        #         positions=[0.56, 1.0],
+        #         # Left align layer name, center-align everything else
+        #         alignments=["left", "center"],
+        #         max_line_length=line_length,
+        #     )
+        #     table_str = table.make()
+        #     print_fn(table_str)
 
         super().summary(
             line_length=line_length,

@@ -14,9 +14,9 @@
 
 """Masked Language Model (MaskedLM) head."""
 
-import keras_core as keras
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 import tensorflow as tf
-from keras_core import operations as ops
 
 from keras_nlp.api_export import keras_nlp_export
 

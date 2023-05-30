@@ -16,8 +16,7 @@
 
 import os
 
-import keras_core as keras
-from keras_core.utils.file_utils import get_file
+from keras_nlp.backend import keras
 
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -96,7 +95,7 @@ class Backbone(keras.Model):
         if not load_weights:
             return model
 
-        weights = get_file(
+        weights = keras.utils.get_file(
             "model.h5",
             metadata["weights_url"],
             cache_subdir=os.path.join("models", preset),

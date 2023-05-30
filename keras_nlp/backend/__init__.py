@@ -17,5 +17,10 @@ if multi_backend():
     import keras_core as keras
 else:
     from tensorflow import keras
+    if not hasattr(keras.saving, "deserialize_keras_object"):
+        keras.saving.deserialize_keras_object = keras.utils.deserialize_keras_object
+    if not hasattr(keras.saving, "serialize_keras_object"):
+        keras.saving.serialize_keras_object = keras.utils.serialize_keras_object
+
 
 from keras_nlp.backend import ops

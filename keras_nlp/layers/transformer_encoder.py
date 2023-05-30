@@ -14,7 +14,7 @@
 
 """Transformer encoder block implementation based on `keras.layers.Layer`."""
 
-import keras_core as keras
+from keras_nlp.backend import keras
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.utils.keras_utils import clone_initializer
@@ -125,10 +125,16 @@ class TransformerEncoder(keras.layers.Layer):
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
         )
-        self._self_attention_layer.build(
-            query_shape=inputs_shape,
-            value_shape=inputs_shape,
-        )
+        if hasattr(self._self_attention_layer, "_build_from_signature"):
+            self._self_attention_layer._build_from_signature(
+                query=inputs_shape,
+                value=inputs_shape,
+            )
+        else:
+            self._self_attention_layer.build(
+                query_shape=inputs_shape,
+                value_shape=inputs_shape,
+            )
         self._self_attention_layernorm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
         )
