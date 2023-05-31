@@ -15,13 +15,12 @@
 
 import os
 
+import keras_core
 import rich
 import tensorflow as tf
-from keras_core.utils.summary_utils import bold_text
-from keras_core.utils.summary_utils import highlight_number
-from keras_core.utils.summary_utils import highlight_symbol
 
 from keras_nlp.backend import keras
+from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -78,6 +77,10 @@ class Task(PipelineModel):
                 "`from_logits=True` to your loss, e.g. "
                 "`loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True)`. "
             )
+
+    def compile(self, *args, **kwargs):
+        super().compile(*args, **kwargs)
+        self._check_for_loss_mismatch()
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         return self.preprocessor(x, y=y, sample_weight=sample_weight)
@@ -225,6 +228,15 @@ class Task(PipelineModel):
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
 
+    @property
+    def layers(self):
+        # Remove preprocessor from layers so it does not show up in the summary.
+        layers = super().layers
+        preprocessor = getattr(self, "preprocessor", None)
+        if preprocessor and preprocessor in layers:
+            layers.remove(preprocessor)
+        return layers
+
     def summary(
         self,
         line_length=None,
@@ -233,36 +245,53 @@ class Task(PipelineModel):
         **kwargs,
     ):
         """Override `model.summary()` to show a preprocessor if set."""
+        # Below is copied from keras-core for now.
+        # We should consider an API contract.
         line_length = line_length or 108
-        positions = positions or [0.3, 0.56, 0.70, 1.0]
+
+        if not print_fn and not keras.utils.is_interactive_logging_enabled():
+            print_fn = print_msg
+
+        def highlight_number(x):
+            return f"[color(45)]{x}[/]" if x is None else f"[color(34)]{x}[/]"
+
+        def highlight_symbol(x):
+            return f"[color(33)]{x}[/]"
+
+        def bold_text(x):
+            return f"[bold]{x}[/]"
 
         if self.preprocessor:
             # Create a rich console for printing. Capture for non-interactive logging.
-            if keras.utils.is_interactive_logging_enabled():
-                console = rich.console.Console(highlight=False)
-            else:
+            if print_fn:
                 console = rich.console.Console(
                     highlight=False, force_terminal=False, color_system=None
                 )
-            console.begin_capture()
+                console.begin_capture()
+            else:
+                console = rich.console.Console(highlight=False)
 
             column_1 = rich.table.Column(
                 "Tokenizer (type)",
                 justify="left",
-                width=positions[2] * line_length,
+                width=int(0.5 * line_length),
             )
             column_2 = rich.table.Column(
                 "Vocab #",
                 justify="right",
-                width=positions[4] * line_length,
+                width=int(0.5 * line_length),
             )
             table = rich.table.Table(
                 column_1, column_2, width=line_length, show_lines=True
             )
-            class_name = highlight_symbol(self.tokenizer.__class__.__name__)
+            tokenizer = self.preprocessor.tokenizer
+            tokenizer_name = rich.markup.escape(tokenizer.name)
+            tokenizer_class = highlight_symbol(
+                rich.markup.escape(tokenizer.__class__.__name__)
+            )
             table.add_row(
-                f"{self.tokenizer.name} ({class_name})",
-                highlight_number(f"{self.tokenizer.vocabulary_size():,}"),
+                f"{tokenizer_name} ({tokenizer_class})",
+                highlight_number(f"{tokenizer.vocabulary_size():,}"),
             )
 
             # Print the to the console.
@@ -271,10 +300,12 @@ class Task(PipelineModel):
             console.print(table)
 
             # Output captured summary for non-interactive logging.
-            if not keras.utils.is_interactive_logging_enabled():
-                keras.utils.print_msg(console.end_capture(), line_break=False)
+            if print_fn:
+                print_fn(console.end_capture(), line_break=False)
 
-        super().summary(
+        # Hardcode summary from keras_core for now.
+        keras_core.Model.summary(
+            self,
             line_length=line_length,
             positions=positions,
             print_fn=print_fn,

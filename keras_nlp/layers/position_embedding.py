@@ -109,12 +109,12 @@ class PositionEmbedding(keras.layers.Layer):
         )
 
     def _trim_and_broadcast_position_embeddings(self, shape, start_index):
-        end_index = start_index + shape[-2]
         # trim to match the length of the input sequence, which might be less
         # than the sequence_length of the layer.
-        position_embeddings = self.position_embeddings[start_index:end_index, :]
-        # then broadcast to add the missing dimensions to match "shape"
-        return ops.broadcast_to(position_embeddings, shape)
+        position_embeddings = ops.expand_dims(self.position_embeddings, 0)
+        position_embeddings = position_embeddings[:, start_index:, :]
+        position_embeddings = position_embeddings[:, : shape[1], :]
+        return position_embeddings
 
     def compute_output_shape(self, input_shape):
         return input_shape

@@ -45,13 +45,13 @@ class TestTask(tf.test.TestCase):
         preprocessor = SimplePreprocessor()
         model = SimpleTask(preprocessor)
         summary = []
-        model.summary(print_fn=lambda x: summary.append(x))
+        model.summary(print_fn=lambda x, line_break: summary.append(x))
         self.assertRegex("\n".join(summary), "Preprocessor:")
 
     def test_summary_without_preprocessor(self):
         model = SimpleTask()
         summary = []
-        model.summary(print_fn=lambda x: summary.append(x))
+        model.summary(print_fn=lambda x, line_break: summary.append(x))
         self.assertNotRegex("\n".join(summary), "Preprocessor:")
 
     def test_mismatched_loss(self):

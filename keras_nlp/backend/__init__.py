@@ -18,6 +18,7 @@ if multi_backend():
 else:
     from tensorflow import keras
 
+    # Shims to handle renames in `tf.keras`.
     if not hasattr(keras.saving, "deserialize_keras_object"):
         keras.saving.deserialize_keras_object = (
             keras.utils.deserialize_keras_object

@@ -14,10 +14,10 @@
 from keras_nlp.backend.config import multi_backend
 
 if multi_backend():
-    from keras_core.operations import *  # noqa: F403, F401
+    from keras_core.src.operations import *  # noqa: F403, F401
 else:
-    from keras_core.backend.tensorflow import *  # noqa: F403, F401
-    from keras_core.backend.tensorflow.core import *  # noqa: F403, F401
-    from keras_core.backend.tensorflow.math import *  # noqa: F403, F401
-    from keras_core.backend.tensorflow.nn import *  # noqa: F403, F401
-    from keras_core.backend.tensorflow.numpy import *  # noqa: F403, F401
+    from keras_core.src.backend.tensorflow import *  # noqa: F403, F401
+    from keras_core.src.backend.tensorflow.core import *  # noqa: F403, F401
+    from keras_core.src.backend.tensorflow.math import *  # noqa: F403, F401
+    from keras_core.src.backend.tensorflow.nn import *  # noqa: F403, F401
+    from keras_core.src.backend.tensorflow.numpy import *  # noqa: F403, F401
