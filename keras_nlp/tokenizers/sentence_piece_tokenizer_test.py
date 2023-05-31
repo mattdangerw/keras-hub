@@ -18,8 +18,8 @@ import os
 import sentencepiece
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.tokenizers.sentence_piece_tokenizer import SentencePieceTokenizer
 
 

@@ -16,8 +16,8 @@
 
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.start_end_packer import StartEndPacker
 
 

@@ -15,9 +15,8 @@
 
 import copy
 
-from keras_nlp.backend import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_preprocessor import BertPreprocessor
@@ -145,17 +144,7 @@ class BertClassifier(Task):
         dropout=0.1,
         **kwargs,
     ):
-        inputs = {
-            "token_ids": keras.Input(
-                shape=(None,), dtype="int32", name="token_ids"
-            ),
-            "segment_ids": keras.Input(
-                shape=(None,), dtype="int32", name="segment_ids"
-            ),
-            "padding_mask": keras.Input(
-                shape=(None,), dtype="int32", name="padding_mask"
-            ),
-        }
+        inputs = backbone.input
         pooled = backbone(inputs)["pooled_output"]
         pooled = keras.layers.Dropout(dropout)(pooled)
         outputs = keras.layers.Dense(

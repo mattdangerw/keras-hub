@@ -14,10 +14,9 @@
 
 """Position embedding implementation based on `keras.layers.Layer`."""
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-
-from keras_nlp.api_export import keras_nlp_export
 
 
 @keras_nlp_export("keras_nlp.layers.PositionEmbedding")

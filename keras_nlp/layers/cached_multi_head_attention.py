@@ -13,11 +13,11 @@
 # limitations under the License.
 """Cached MHA layer based on `keras.layers.MultiHeadAttention`."""
 
-import keras_core as keras
-from keras_core import operations as ops
 from tensorflow.compiler.tf2xla.python.xla import dynamic_update_slice
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.CachedMultiHeadAttention")
@@ -101,7 +101,8 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         # cache at the specified index. `cache = None` handles the training
         # case, where we don't use the cache at all.
         if cache is not None:
-            key_cache, value_cache = ops.unstack(cache, axis=1)
+            key_cache = cache[:, 0, ...]
+            value_cache = cache[:, 1, ...]
             if cache_update_index is None:
                 key = key_cache
                 value = value_cache
@@ -124,7 +125,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
 
         query = ops.multiply(
             query,
-            1.0 / ops.math.sqrt(ops.cast(self._key_dim, query.dtype)),
+            1.0 / ops.sqrt(ops.cast(self._key_dim, query.dtype)),
         )
         attention_scores = ops.einsum(self._dot_product_equation, key, query)
         attention_scores = self._masked_softmax(

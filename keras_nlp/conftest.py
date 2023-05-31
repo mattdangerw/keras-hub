@@ -17,7 +17,8 @@ import sys
 import pytest
 import tensorflow as tf
 from packaging import version
-from tensorflow import keras
+
+from keras_nlp.backend import keras
 
 
 @pytest.fixture(scope="session")

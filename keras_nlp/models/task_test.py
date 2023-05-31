@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.keras.losses import SparseCategoricalCrossentropy
 
+from keras_nlp.backend import keras
 from keras_nlp.models.preprocessor import Preprocessor
 from keras_nlp.models.task import Task
 from keras_nlp.tokenizers.tokenizer import Tokenizer

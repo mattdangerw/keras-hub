@@ -15,8 +15,8 @@
 """Tests for RougeL."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.metrics.rouge_l import RougeL
 
 

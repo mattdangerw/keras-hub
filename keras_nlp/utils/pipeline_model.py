@@ -17,9 +17,9 @@
 import functools
 import math
 
-from keras_nlp.backend import keras
 import tensorflow as tf
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.keras_utils import pack_x_y_sample_weight
 from keras_nlp.utils.tf_utils import is_tensor_type
 
@@ -281,7 +281,7 @@ class PipelineModel(keras.Model):
     ):
         if self.include_preprocessing:
             data = self.preprocess_samples(x)
-            x, _, _ = unpack_x_y_sample_weight(data)
+            x, _, _ = keras.utils.unpack_x_y_sample_weight(data)
         return super().predict_on_batch(
             x=x,
             **kwargs,

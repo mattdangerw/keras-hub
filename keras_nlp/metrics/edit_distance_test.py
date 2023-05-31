@@ -15,8 +15,8 @@
 """Tests for EditDistance."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.metrics.edit_distance import EditDistance
 
 

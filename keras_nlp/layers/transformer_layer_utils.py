@@ -15,6 +15,7 @@
 """ Utility functions for `TransformerEncoder` and `TransformerDecoder`."""
 
 from absl import logging
+
 from keras_nlp.backend import ops
 
 
@@ -56,9 +57,9 @@ def compute_causal_mask(batch_size, input_length, output_length, cache_index=0):
         `(batch_size, output_length, input_length)` that can be passed to a
         attention layer.
     """
-    i = ops.range(output_length)[:, ops.newaxis] + cache_index
-    j = ops.range(input_length)
-    mask = ops.cast(i >= j, dtype="int32")[ops.newaxis, :, :]
+    i = ops.expand_dims(ops.arange(output_length), axis=1) + cache_index
+    j = ops.arange(input_length)
+    mask = ops.expand_dims(ops.cast(i >= j, dtype="int32"), axis=0)
     return ops.broadcast_to(mask, (batch_size, output_length, input_length))
 
 

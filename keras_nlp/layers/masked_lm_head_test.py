@@ -17,8 +17,8 @@ import os
 
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers import masked_lm_head
 
 
@@ -30,7 +30,7 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = tf.random.uniform(shape=(4, 10, 16))
@@ -51,7 +51,7 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
         # need to support this in the layer.
         sequence = keras.Input(shape=(10, 32))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(sequence, mask_positions=positions)
+        outputs = head(sequence, masked_positions=positions)
         model = keras.Model((sequence, positions), outputs)
         sequence_data = tf.random.uniform(shape=(4, 10, 32))
         position_data = tf.random.uniform(
@@ -111,7 +111,7 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = tf.random.uniform(shape=(4, 10, 16))
@@ -144,8 +144,8 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
             shape=(4, 5), maxval=10, dtype="int32"
         )
         # The weights of head1 and head2 are different.
-        head1_output = head1(token_data, mask_positions=position_data)
-        head2_output = head2(token_data, mask_positions=position_data)
+        head1_output = head1(token_data, masked_positions=position_data)
+        head2_output = head2(token_data, masked_positions=position_data)
         self.assertNotAllClose(head1_output, head2_output)
 
         checkpoint = tf.train.Checkpoint(head1)
@@ -153,8 +153,8 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
         save_path = checkpoint.save(self.get_temp_dir())
         checkpoint2.restore(save_path)
 
-        head1_output = head1(token_data, mask_positions=position_data)
-        head2_output = head2(token_data, mask_positions=position_data)
+        head1_output = head1(token_data, masked_positions=position_data)
+        head2_output = head2(token_data, masked_positions=position_data)
         self.assertAllClose(head1_output, head2_output)
 
     @parameterized.named_parameters(
@@ -168,7 +168,7 @@ class MaskedLMHeadTest(tf.test.TestCase, parameterized.TestCase):
         )
         encoded_tokens = keras.Input(shape=(10, 16))
         positions = keras.Input(shape=(5,), dtype="int32")
-        outputs = head(encoded_tokens, mask_positions=positions)
+        outputs = head(encoded_tokens, masked_positions=positions)
         model = keras.Model((encoded_tokens, positions), outputs)
 
         token_data = tf.random.uniform(shape=(4, 10, 16))

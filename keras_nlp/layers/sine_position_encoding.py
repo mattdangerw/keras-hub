@@ -14,10 +14,9 @@
 
 """Sinusoidal position embedding layer."""
 
-import tensorflow as tf
-from tensorflow import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.SinePositionEncoding")
@@ -70,45 +69,29 @@ class SinePositionEncoding(keras.layers.Layer):
         self.max_wavelength = max_wavelength
 
     def call(self, inputs):
-        # TODO(jbischof): replace `hidden_size` with`hidden_dim` for consistency
-        # with other layers.
-        if isinstance(inputs, tf.RaggedTensor):
-            bounding_shape = inputs.bounding_shape()
-            position_embeddings = (
-                self._compute_trim_and_broadcast_position_embeddings(
-                    bounding_shape,
-                )
-            )
-            # then apply row lengths to recreate the same ragged shape as inputs
-            return tf.RaggedTensor.from_tensor(
-                position_embeddings,
-                inputs.nested_row_lengths(),
-            )
-        else:
-            return self._compute_trim_and_broadcast_position_embeddings(
-                tf.shape(inputs),
-            )
+        shape = ops.shape(inputs)
+        return self._compute_trim_and_broadcast_position_embeddings(shape)
 
     def _compute_trim_and_broadcast_position_embeddings(self, shape):
         seq_length = shape[-2]
         hidden_size = shape[-1]
-        position = tf.cast(tf.range(seq_length), self.compute_dtype)
-        min_freq = tf.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
-        timescales = tf.pow(
+        position = ops.cast(ops.arange(seq_length), self.compute_dtype)
+        min_freq = ops.cast(1 / self.max_wavelength, dtype=self.compute_dtype)
+        timescales = ops.power(
             min_freq,
-            tf.cast(2 * (tf.range(hidden_size) // 2), self.compute_dtype)
-            / tf.cast(hidden_size, self.compute_dtype),
+            ops.cast(2 * (ops.arange(hidden_size) // 2), self.compute_dtype)
+            / ops.cast(hidden_size, self.compute_dtype),
         )
-        angles = tf.expand_dims(position, 1) * tf.expand_dims(timescales, 0)
+        angles = ops.expand_dims(position, 1) * ops.expand_dims(timescales, 0)
         # even indices are sine, odd are cosine
-        cos_mask = tf.cast(tf.range(hidden_size) % 2, self.compute_dtype)
+        cos_mask = ops.cast(ops.arange(hidden_size) % 2, self.compute_dtype)
         sin_mask = 1 - cos_mask
         # embedding shape is [seq_length, hidden_size]
         positional_encodings = (
-            tf.sin(angles) * sin_mask + tf.cos(angles) * cos_mask
+            ops.sin(angles) * sin_mask + ops.cos(angles) * cos_mask
         )
 
-        return tf.broadcast_to(positional_encodings, shape)
+        return ops.broadcast_to(positional_encodings, shape)
 
     def get_config(self):
         config = super().get_config()

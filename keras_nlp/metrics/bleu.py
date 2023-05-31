@@ -18,9 +18,9 @@ import collections
 import math
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.utils.tf_utils import tensor_to_list
 
 REPLACE_SUBSTRINGS = [

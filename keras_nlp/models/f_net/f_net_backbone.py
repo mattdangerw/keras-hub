@@ -17,9 +17,9 @@
 import copy
 
 import tensorflow as tf
-from tensorflow import keras
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.f_net_encoder import FNetEncoder
 from keras_nlp.layers.position_embedding import PositionEmbedding
 from keras_nlp.models.backbone import Backbone

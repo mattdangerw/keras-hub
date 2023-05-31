@@ -14,8 +14,8 @@
 """Tests for RandomSwaps Layer."""
 
 import tensorflow as tf
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.layers.random_swap import RandomSwap
 
 

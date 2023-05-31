@@ -15,12 +15,12 @@
 
 import os
 
-from keras_nlp.backend import keras
 import numpy as np
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
 
+from keras_nlp.backend import keras
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 
 

@@ -14,11 +14,11 @@
 
 """Masked Language Model (MaskedLM) head."""
 
-from keras_nlp.backend import keras
-from keras_nlp.backend import ops
 import tensorflow as tf
 
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
+from keras_nlp.backend import ops
 
 
 @keras_nlp_export("keras_nlp.layers.MaskedLMHead")
@@ -142,7 +142,7 @@ class MaskedLMHead(keras.layers.Layer):
                 )
             self.vocabulary_size = shape[0]
 
-    def build(self, inputs_shape, masked_positions_shape):
+    def build(self, inputs_shape, masked_positions_shape=None):
         if self.embedding_weights is not None:
             feature_size = self.embedding_weights.shape[-1]
         else:

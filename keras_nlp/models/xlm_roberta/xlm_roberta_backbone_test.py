@@ -19,8 +19,8 @@ import os
 import pytest
 import tensorflow as tf
 from absl.testing import parameterized
-from tensorflow import keras
 
+from keras_nlp.backend import keras
 from keras_nlp.models.xlm_roberta.xlm_roberta_backbone import XLMRobertaBackbone
 
 

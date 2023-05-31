@@ -15,9 +15,13 @@
 
 import os
 
-from keras_nlp.backend import keras
+import rich
 import tensorflow as tf
+from keras_core.utils.summary_utils import bold_text
+from keras_core.utils.summary_utils import highlight_number
+from keras_core.utils.summary_utils import highlight_symbol
 
+from keras_nlp.backend import keras
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -229,32 +233,46 @@ class Task(PipelineModel):
         **kwargs,
     ):
         """Override `model.summary()` to show a preprocessor if set."""
-        # Defaults are copied from core Keras; we should try to stay in sync.
-        # line_length = line_length or 108
-        # positions = positions or [0.3, 0.56, 0.70, 1.0]
-        # if print_fn is None:
-        #     print_fn = io_utils.print_msg
+        line_length = line_length or 108
+        positions = positions or [0.3, 0.56, 0.70, 1.0]
 
-        # if self.preprocessor:
-        #     tokenizer = self.preprocessor.tokenizer
-        #     rows = [
-        #         [
-        #             f"{tokenizer.name} ({tokenizer.__class__.__name__})",
-        #             f"{tokenizer.vocabulary_size()}",
-        #         ],
-        #     ]
-        #     title = f' Preprocessor: "{self.preprocessor.name}"'
-        #     print_fn(text_rendering.highlight_msg(title))
-        #     table = text_rendering.TextTable(
-        #         header=["Tokenizer (type)", "Vocab #"],
-        #         rows=rows,
-        #         positions=[0.56, 1.0],
-        #         # Left align layer name, center-align everything else
-        #         alignments=["left", "center"],
-        #         max_line_length=line_length,
-        #     )
-        #     table_str = table.make()
-        #     print_fn(table_str)
+        if self.preprocessor:
+            # Create a rich console for printing. Capture for non-interactive logging.
+            if keras.utils.is_interactive_logging_enabled():
+                console = rich.console.Console(highlight=False)
+            else:
+                console = rich.console.Console(
+                    highlight=False, force_terminal=False, color_system=None
+                )
+            console.begin_capture()
+
+            column_1 = rich.table.Column(
+                "Tokenizer (type)",
+                justify="left",
+                width=positions[2] * line_length,
+            )
+            column_2 = rich.table.Column(
+                "Vocab #",
+                justify="right",
+                width=positions[4] * line_length,
+            )
+            table = rich.table.Table(
+                column_1, column_2, width=line_length, show_lines=True
+            )
+            class_name = highlight_symbol(self.tokenizer.__class__.__name__)
+            table.add_row(
+                f"{self.tokenizer.name} ({class_name})",
+                highlight_number(f"{self.tokenizer.vocabulary_size():,}"),
+            )
+
+            # Print the to the console.
+            preprocessor_name = rich.markup.escape(self.preprocessor.name)
+            console.print(bold_text(f'Preprocessor: "{preprocessor_name}"'))
+            console.print(table)
+
+            # Output captured summary for non-interactive logging.
+            if not keras.utils.is_interactive_logging_enabled():
+                keras.utils.print_msg(console.end_capture(), line_break=False)
 
         super().summary(
             line_length=line_length,

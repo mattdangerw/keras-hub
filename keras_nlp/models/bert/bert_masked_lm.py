@@ -15,9 +15,8 @@
 
 import copy
 
-from keras_nlp.backend import keras
-
 from keras_nlp.api_export import keras_nlp_export
+from keras_nlp.backend import keras
 from keras_nlp.layers.masked_lm_head import MaskedLMHead
 from keras_nlp.models.bert.bert_backbone import BertBackbone
 from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
@@ -107,20 +106,7 @@ class BertMaskedLM(Task):
         preprocessor=None,
         **kwargs,
     ):
-        inputs = {
-            "token_ids": keras.Input(
-                shape=(None,), dtype="int32", name="token_ids"
-            ),
-            "segment_ids": keras.Input(
-                shape=(None,), dtype="int32", name="segment_ids"
-            ),
-            "padding_mask": keras.Input(
-                shape=(None,), dtype="int32", name="padding_mask"
-            ),
-            "mask_positions": keras.Input(
-                shape=(None,), dtype="int32", name="mask_positions"
-            ),
-        }
+        inputs = backbone.input
         backbone_outputs = backbone(
             {
                 "token_ids": inputs["token_ids"],
