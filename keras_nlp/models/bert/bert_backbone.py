@@ -138,7 +138,7 @@ class BertBackbone(Backbone):
         )(segment_id_input)
 
         # Sum, normalize and apply dropout to embeddings.
-        x = keras.layers.Add()(
+        x = keras.layers.Add(name="embeddings_add")(
             (token_embedding, position_embedding, segment_embedding)
         )
         x = keras.layers.LayerNormalization(
@@ -216,6 +216,9 @@ class BertBackbone(Backbone):
             }
         )
         return config
+
+    def get_lora_backbone():
+        return LoraBackbone(self)
 
     @property
     def token_embedding(self):
