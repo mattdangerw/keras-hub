@@ -16,10 +16,9 @@ from keras_nlp.backend import ops
 
 
 class RotaryEmbedding(keras.layers.Layer):
-    def __init__(self, attn_head_size, percentage, max_wavelength=10000):
+    def __init__(self, percentage, max_wavelength=10000):
         super().__init__()
-        # self.rotary_percentage = rotary_percentage
-        self.rotary_ndims = int(attn_head_size * percentage)
+        self.percentage = percentage
         self.max_wavelength = max_wavelength
 
     def _apply_rotary_pos_emb(self, tensor, cos_emb, sin_emb):
@@ -33,44 +32,36 @@ class RotaryEmbedding(keras.layers.Layer):
     def _compute_cos_sin_embedding(self, x, seq_dim=1):
         seq_len = ops.shape(x)[seq_dim]
         range = ops.arange(0, self.rotary_ndims, 2, "float32")
-        inverse_freq = 1.0 / (self.max_wavelength ** (range / self.rotary_ndims))
+        inverse_freq = 1.0 / (
+            self.max_wavelength ** (range / self.rotary_ndims)
+        )
         tensor = ops.arange(seq_len, dtype=inverse_freq.dtype)
         freqs = ops.einsum("i, j -> ij", tensor, inverse_freq)
         embedding = ops.concatenate((freqs, freqs), axis=-1)[None, :, None, :]
         return ops.cos(embedding), ops.sin(embedding)
 
-    # def build(self, attn_head_size):
-    #     self.attn_head_size = attn_head_size
-    #     self.rotary_ndims = ops.cast(
-    #         ops.cast(attn_head_size, "int32")
-    #         * self.rotary_percentage,
-    #         "int32",
-    #     )
-    #     self.built = True
+    def build(self, attn_head_size):
+        self.attn_head_size = attn_head_size
+        self.rotary_ndims = int(self.attn_head_size * self.percentage)
+        self.built = True
 
-    # def __call__(self, query, key):
-    #     if not self.built:
-    #         attn_head_size = query.shape[-1]
-    #         self.build(attn_head_size)
-    #     return super().__call__(query, key)
+    def __call__(self, query, key):
+        if not self.built:
+            attn_head_size = query.shape[-1]
+            self.build(attn_head_size)
+        return super().__call__(query, key)
 
     def call(self, query, key):
-        # shape = ops.shape(query)
-        # attn_head_size = shape[-1]
-
-
         query_rot, query_pass = (
-            query[..., :self.rotary_ndims],
-            query[..., self.rotary_ndims:],
+            query[..., : self.rotary_ndims],
+            query[..., self.rotary_ndims :],
         )
         key_rot, key_pass = (
-            key[..., :self.rotary_ndims],
-            key[..., self.rotary_ndims:],
+            key[..., : self.rotary_ndims],
+            key[..., self.rotary_ndims :],
         )
 
-        cos_emb, sin_emb = self._compute_cos_sin_embedding(
-            key_rot, seq_dim=1
-        )
+        cos_emb, sin_emb = self._compute_cos_sin_embedding(key_rot, seq_dim=1)
         query_emb = self._apply_rotary_pos_emb(query_rot, cos_emb, sin_emb)
         key_emb = self._apply_rotary_pos_emb(key_rot, cos_emb, sin_emb)
 
@@ -83,7 +74,7 @@ class RotaryEmbedding(keras.layers.Layer):
         config = super().get_config()
         config.update(
             {
-                # "rotary_percentage": self.rotary_percentage,
+                "rotary_percentage": self.rotary_percentage,
                 "max_wavelength": self.max_wavelength,
             }
         )
