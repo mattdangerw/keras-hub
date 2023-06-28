@@ -63,8 +63,9 @@ class GPTNeoXAttention(keras.layers.Layer):
         self.dropout = dropout
         self.attn_head_size = hidden_dim // num_heads
         self.rotary_max_wavelength = rotary_max_wavelength
+
         self.rotary_embedding = RotaryEmbedding(
-            self.rotary_percentage, rotary_max_wavelength
+            self.attn_head_size, rotary_percentage, rotary_max_wavelength
         )
         self.kernel_initializer = keras.initializers.get(kernel_initializer)
         self.bias_initializer = keras.initializers.get(bias_initializer)
