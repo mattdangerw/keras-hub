@@ -97,11 +97,13 @@ class FNetEncoder(keras.layers.Layer):
         # Layer Norm layers.
         self._mixing_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="mixing_layer_norm",
         )
         self._mixing_layer_norm.build(inputs_shape)
         self._output_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="output_layer_norm",
         )
         self._output_layer_norm.build(inputs_shape)
@@ -112,6 +114,7 @@ class FNetEncoder(keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="intermediate_dense",
         )
         self._intermediate_dense.build(inputs_shape)
@@ -119,6 +122,7 @@ class FNetEncoder(keras.layers.Layer):
             feature_size,
             kernel_initializer=clone_initializer(self.kernel_initializer),
             bias_initializer=clone_initializer(self.bias_initializer),
+            dtype=self.dtype_policy,
             name="output_dense",
         )
         self._output_dense.build(

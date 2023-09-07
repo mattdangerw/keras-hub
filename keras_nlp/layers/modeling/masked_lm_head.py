@@ -141,10 +141,12 @@ class MaskedLMHead(keras.layers.Layer):
             activation=self.intermediate_activation,
             kernel_initializer=self.kernel_initializer,
             bias_initializer=self.bias_initializer,
+            dtype=self.dtype_policy,
             name="intermediate_dense",
         )
         self._intermediate_layer_norm = keras.layers.LayerNormalization(
             epsilon=self.layer_norm_epsilon,
+            dtype=self.dtype_policy,
             name="intermediate_layer_norm",
         )
         # The gather length does not affect any of our built variables, so
