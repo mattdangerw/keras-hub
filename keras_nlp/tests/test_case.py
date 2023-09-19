@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import json
+import os
+import re
 
 import tensorflow as tf
 import tree
@@ -168,6 +170,50 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         if run_training_check:
             run_training_step(layer, input_data, output_data)
 
+    def run_backbone_test(
+        self,
+        backbone_cls,
+        init_kwargs,
+        input_data,
+        expected_output_shape,
+        variable_length_data=None,
+    ):
+        backbone = backbone_cls(**init_kwargs)
+        # Check serialization (without a full save).
+        self.run_class_serialization_test(backbone)
+
+        # Call model eagerly.
+        output = backbone(input_data)
+        if isinstance(expected_output_shape, dict):
+            for key in expected_output_shape:
+                self.assertEqual(output[key].shape, expected_output_shape[key])
+        else:
+            self.assertEqual(output.shape, expected_output_shape)
+
+        # Check we can embed tokens eagerly.
+        output = backbone.token_embedding(input_data["token_ids"])
+
+        # Check variable length sequences.
+        if variable_length_data is None:
+            # If no variable length data passed, assume the second axis of all
+            # inputs is our sequence axis and create it ourselves.
+            variable_length_data = [
+                tree.map_structure(lambda x: x[:, :seq_length, ...], input_data)
+                for seq_length in (2, 3, 4)
+            ]
+        for batch in variable_length_data:
+            backbone(batch)
+
+        # Check compiled predict function.
+        backbone.predict(input_data)
+        input_dataset = tf.data.Dataset.from_tensor_slices(input_data).batch(2)
+        backbone.predict(input_dataset)
+
+        # Check name maps to classname.
+        name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", backbone_cls.__name__)
+        name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
+        self.assertRegexpMatches(backbone.name, name)
+
     def run_class_serialization_test(self, instance):
         # get_config roundtrip
         cls = instance.__class__
@@ -198,3 +244,17 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
                 if "__annotations__" in lst:
                     lst.remove("__annotations__")
             self.assertEqual(ref_dir, new_dir)
+
+    def run_model_saving_test(self, model_cls, init_kwargs, input_data):
+        model = model_cls(**init_kwargs)
+        model_output = model(input_data)
+        path = os.path.join(self.get_temp_dir(), "model.keras")
+        model.save(path, save_format="keras_v3")
+        restored_model = keras.models.load_model(path)
+
+        # Check we got the real object back.
+        self.assertIsInstance(restored_model, model_cls)
+
+        # Check that output matches.
+        restored_output = restored_model(input_data)
+        self.assertAllClose(model_output, restored_output)
