@@ -24,7 +24,7 @@ class LoraDense(keras.layers.Layer):
 
     def __init__(
         self,
-        layer,
+        inner_dense,
         rank=8,
         alpha=32,
         **kwargs,
@@ -34,7 +34,7 @@ class LoraDense(keras.layers.Layer):
         self.rank = rank
         self.alpha = alpha
         self.scale = alpha / rank
-        self.layer = layer
+        self.inner_dense = inner_dense
 
         self.lora_a = keras.layers.Dense(
             units=rank,
@@ -47,16 +47,16 @@ class LoraDense(keras.layers.Layer):
             ),
             name="lora_a",
         )
-        if isinstance(layer, keras.layers.EinsumDense):
+        if isinstance(inner_dense, keras.layers.EinsumDense):
             self.lora_b = keras.layers.EinsumDense(
-                equation=layer.equation,
-                output_shape=layer.partial_output_shape,
+                equation=inner_dense.equation,
+                output_shape=inner_dense.partial_output_shape,
                 kernel_initializer="zeros",
                 name="lora_b",
             )
-        elif isinstance(layer, keras.layers.Dense):
+        elif isinstance(inner_dense, keras.layers.Dense):
             self.lora_b = keras.layers.Dense(
-                units=layer.units,
+                units=inner_dense.units,
                 kernel_initializer="zeros",
                 use_bias=False,
                 name="lora_b",
@@ -64,12 +64,11 @@ class LoraDense(keras.layers.Layer):
         else:
             raise ValueError(
                 "Only `Dense` and `EinsumDense` inner layers are supported. "
-                f"Received: layer={layer}"
+                f"Received: layer={inner_dense}"
             )
 
-        # TODO: stop hardcoding input shape?
-        if layer.built:
-            self.build((None, None, self.layer.kernel.shape[0]))
+        if inner_dense.built:
+            self.build_from_config(inner_dense.get_build_config())
 
     def build(self, inputs_shape):
         self.lora_a.build(inputs_shape)
@@ -77,14 +76,32 @@ class LoraDense(keras.layers.Layer):
         self.built = True
 
     def merge_weights(self):
+        """Merge lora updates into the wrapped dense layer.
+
+        This function should only be called outside of any compiled context
+        (e.g. not during `fit()`, `predict()` or `evaluate()`). It will merge
+        the updates from the lora layers into the original dense layer, and
+        re-initialize the lor
+        """
+        # Add lora updates back into the inner dense kernel.
         updates = ops.squeeze(
             self.lora_b(ops.expand_dims(self.lora_a.kernel, 0)), 0
         )
-        self.layer.kernel.assign_add(updates)
-        return self.layer
+        self.inner_dense.kernel.assign_add(updates)
+        # Re-initialize lora weights.
+        self.lora_a.kernel.assign(
+            self.lora_a.kernel_initializer(
+                self.lora_a.kernel.shape, self.lora_a.kernel.dtype
+            )
+        )
+        self.lora_b.kernel.assign(
+            self.lora_b.kernel_initializer(
+                self.lora_b.kernel.shape, self.lora_b.kernel.dtype
+            )
+        )
 
     def call(self, inputs):
-        original_output = self.layer(inputs)
+        original_output = self.inner_dense(inputs)
         # If we are fine-tuning the model, we will add LoRA layers' output
         # to the original layer's output.
         lora_output = self.lora_b(self.lora_a(inputs)) * self.scale
@@ -92,14 +109,16 @@ class LoraDense(keras.layers.Layer):
 
     @classmethod
     def from_config(cls, config):
-        config["layer"] = keras.deserialize_keras_object(config["layer"])
+        config["inner_dense"] = keras.deserialize_keras_object(
+            config["inner_dense"]
+        )
         return super().from_config(config)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "layer": self.serialize_keras_object(self.layer),
+                "inner_dense": self.serialize_keras_object(self.inner_dense),
             }
         )
         return config

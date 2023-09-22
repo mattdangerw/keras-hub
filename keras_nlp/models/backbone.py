@@ -102,8 +102,8 @@ class Backbone(keras.Model):
             for path in self.lora_layer_paths:
                 lora_dense = getattr(layer, path, None)
                 if lora_dense and isinstance(lora_dense, LoraDense):
-                    dense = lora_dense.merge_weights()
-                    setattr(layer, path, dense)
+                    lora_dense.merge_weights()
+                    setattr(layer, path, lora_dense.inner_dense)
 
         # Clear compile cache.
         if self.compiled:
