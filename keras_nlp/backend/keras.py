@@ -14,11 +14,15 @@
 
 import types
 
+import keras
 import tensorflow as tf
+from packaging import version
 
 from keras_nlp.backend.config import multi_backend
 
-if multi_backend():
+if version.parse(keras.__version__) >= version.parse("3.0.0"):
+    from keras import *  # noqa: F403, F401
+elif multi_backend():
     from keras_core import *  # noqa: F403, F401
 else:
     from tensorflow.keras import *  # noqa: F403, F401
