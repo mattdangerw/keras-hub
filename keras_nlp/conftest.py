@@ -17,7 +17,7 @@ import os
 import pytest
 import tensorflow as tf
 
-from keras_nlp.backend import config as backend_config
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 
 
@@ -109,7 +109,7 @@ def pytest_collection_modifyitems(config, items):
         reason="need --run_tpu option to run",
     )
     skip_tf_only = pytest.mark.skipif(
-        not backend_config.backend() == "tensorflow",
+        not keras.config.backend() == "tensorflow",
         reason="tests only run on tf backend",
     )
     for item in items:
@@ -125,10 +125,10 @@ def pytest_collection_modifyitems(config, items):
 
 # Disable traceback filtering for quicker debugging of tests failures.
 tf.debugging.disable_traceback_filtering()
-if backend_config.multi_backend():
+if config.multi_backend():
     keras.config.disable_traceback_filtering()
 
 # One off setup for dtensor tests.
-if not backend_config.multi_backend():
+if not config.multi_backend():
     keras.backend.experimental.enable_tf_random_generator()
     keras.utils.set_random_seed(1337)

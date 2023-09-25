@@ -15,8 +15,6 @@
 import json
 import os
 
-import keras_core
-
 _MULTI_BACKEND = False
 
 # Set Keras base dir path given KERAS_HOME env variable, if applicable.
@@ -65,10 +63,5 @@ if "KERAS_BACKEND" in os.environ and os.environ["KERAS_BACKEND"]:
 
 
 def multi_backend():
-    """Check if keras_core is enabled."""
+    """Check if multi-backend Keras is enabled."""
     return _MULTI_BACKEND
-
-
-def backend():
-    """Check the backend framework."""
-    return "tensorflow" if not multi_backend() else keras_core.config.backend()

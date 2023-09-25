@@ -175,7 +175,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
             run_training_step(layer, input_data, output_data)
 
         # Never test mixed precision on torch CPU. Torch lacks support.
-        if run_mixed_precision_check and config.backend() == "torch":
+        if run_mixed_precision_check and keras.config.backend() == "torch":
             import torch
 
             run_mixed_precision_check = torch.cuda.is_available()

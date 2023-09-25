@@ -26,5 +26,3 @@ as add shims to support older version of `tf.keras`.
 
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
-from keras_nlp.backend import ops
-from keras_nlp.backend import random

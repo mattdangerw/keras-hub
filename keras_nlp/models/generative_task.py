@@ -17,7 +17,6 @@ import itertools
 import tensorflow as tf
 import tree
 
-from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.task import Task
@@ -59,7 +58,7 @@ class GenerativeTask(Task):
             return self.generate_function
 
         self.generate_function = self.generate_step
-        if config.backend() == "torch":
+        if keras.config.backend() == "torch":
             import torch
 
             def wrapped_generate_function(
@@ -70,14 +69,14 @@ class GenerativeTask(Task):
                     return self.generate_step(inputs, end_token_id)
 
             self.generate_function = wrapped_generate_function
-        elif config.backend() == "tensorflow" and not self.run_eagerly:
+        elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
             # `jit_compile` is a property of keras.Model after TF 2.12.
             # Use `getattr()` for backwards compatibility.
             jit_compile = getattr(self, "jit_compile", True)
             self.generate_function = tf.function(
                 self.generate_step, jit_compile=jit_compile
             )
-        elif config.backend() == "jax" and not self.run_eagerly:
+        elif keras.config.backend() == "jax" and not self.run_eagerly:
             import jax
 
             @jax.jit

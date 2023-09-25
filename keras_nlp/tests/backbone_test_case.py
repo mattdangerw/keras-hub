@@ -11,10 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from keras_nlp.backend.config import multi_backend
-
-if multi_backend():
-    from keras.random import *  # noqa: F403, F401
-else:
-    from keras.src.backend.tensorflow.random import *  # noqa: F403, F401

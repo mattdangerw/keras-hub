@@ -14,7 +14,7 @@
 
 import tensorflow as tf
 
-from keras_nlp.backend import config
+from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 
 try:
@@ -140,7 +140,7 @@ def assert_tf_text_installed(symbol_name):
 
 
 def assert_tf_backend(symbol_name):
-    if config.backend() != "tensorflow":
+    if keras.config.backend() != "tensorflow":
         raise RuntimeError(
             f"{symbol_name} requires the `tensorflow` backend. "
             "Please set `KERAS_BACKEND=tensorflow` when running your program."

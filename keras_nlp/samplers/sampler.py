@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
@@ -177,7 +176,7 @@ class Sampler:
 
     def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
         """Run ops.while_loops with a `StatelessScope` if necessary."""
-        if config.backend() == "jax":
+        if keras.config.backend() == "jax":
 
             def stateless_cond(variables, *loop_vars):
                 return cond(*loop_vars)
