@@ -138,6 +138,7 @@ class BertClassifier(Task):
         preprocessor=None,
         activation=None,
         dropout=0.1,
+        compile=True,
         **kwargs,
     ):
         inputs = backbone.input
@@ -164,15 +165,16 @@ class BertClassifier(Task):
         self.dropout = dropout
 
         # Default compilation
-        logit_output = self.activation == keras.activations.linear
-        self.compile(
-            loss=keras.losses.SparseCategoricalCrossentropy(
-                from_logits=logit_output
-            ),
-            optimizer=keras.optimizers.Adam(5e-5),
-            metrics=[keras.metrics.SparseCategoricalAccuracy()],
-            jit_compile=True,
-        )
+        if compile:
+            logit_output = self.activation == keras.activations.linear
+            self.compile(
+                loss=keras.losses.SparseCategoricalCrossentropy(
+                    from_logits=logit_output
+                ),
+                optimizer=keras.optimizers.Adam(5e-5),
+                metrics=[keras.metrics.SparseCategoricalAccuracy()],
+                jit_compile=True,
+            )
 
     def get_config(self):
         config = super().get_config()

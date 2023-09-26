@@ -15,6 +15,8 @@
 import os
 
 from keras_nlp.backend import keras
+from keras_nlp.models.lora import add_lora_layers
+from keras_nlp.models.lora import merge_lora_layers
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
@@ -24,6 +26,7 @@ class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._token_embedding = None
+        self.has_lora_layers = False
 
     def __setattr__(self, name, value):
         # Work around torch setattr for properties.
@@ -48,7 +51,40 @@ class Backbone(keras.Model):
         self._token_embedding = value
         self._setattr_tracking = True
 
+    @property
+    def lora_layer_paths(self):
+        """The default layers to target with lora for this model."""
+        return [".*query", ".*value"]
+
+    def add_lora_layers(
+        self,
+        lora_layer_paths=[],
+        trainable_weight_paths=[],
+        rank=8,
+        alpha=32,
+    ):
+        if not lora_layer_paths:
+            lora_layer_paths = self.lora_layer_paths
+        add_lora_layers(
+            self,
+            lora_layer_paths=lora_layer_paths,
+            trainable_weight_paths=trainable_weight_paths,
+            rank=rank,
+            alpha=alpha,
+        )
+        self.has_lora_layers = True
+
+    def merge_lora_layers(self):
+        merge_lora_layers(self)
+        self.has_lora_layers = False
+
     def get_config(self):
+        if self.has_lora_layers:
+            raise ValueError(
+                "Attempting to serialize a model with lora layers. Call "
+                "`model.merge_lora_layers()` before saving, cloning, or "
+                f"serializing a model. Received: model={self}"
+            )
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Backbone constructors.
         return {

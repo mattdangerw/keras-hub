@@ -20,6 +20,8 @@ from rich import markup
 from rich import table as rich_table
 
 from keras_nlp.backend import keras
+from keras_nlp.models.lora import add_lora_layers
+from keras_nlp.models.lora import merge_lora_layers
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
 from keras_nlp.utils.python_utils import classproperty
@@ -33,6 +35,7 @@ class Task(PipelineModel):
     def __init__(self, *args, **kwargs):
         self._backbone = None
         self._preprocessor = None
+        self.has_lora_layers = False
         super().__init__(*args, **kwargs)
 
     def _check_for_loss_mismatch(self, loss):
@@ -110,7 +113,49 @@ class Task(PipelineModel):
         self.include_preprocessing = value is not None
         self._preprocessor = value
 
+    @property
+    def lora_layer_paths(self):
+        return self.backbone.lora_layer_paths
+
+    def add_lora_layers(
+        self,
+        lora_layer_paths=[],
+        trainable_weight_paths=[],
+        rank=8,
+        alpha=32,
+    ):
+        if not lora_layer_paths:
+            lora_layer_paths = self.lora_layer_paths
+
+        # Always leave task specific weights as trainable (e.g. classification
+        # heads). We could consider opening this up as a boolean option.
+        task_only_weights = set(id(w) for w in self.weights) - set(
+            id(w) for w in self.backbone.weights
+        )
+        for weight in self.weights:
+            if id(weight) in task_only_weights and weight.trainable:
+                trainable_weight_paths.append(weight.path)
+
+        add_lora_layers(
+            self,
+            lora_layer_paths=lora_layer_paths,
+            trainable_weight_paths=trainable_weight_paths,
+            rank=rank,
+            alpha=alpha,
+        )
+        self.has_lora_layers = True
+
+    def merge_lora_layers(self):
+        merge_lora_layers(self)
+        self.has_lora_layers = False
+
     def get_config(self):
+        if self.has_lora_layers:
+            raise ValueError(
+                "Attempting to serialize a model with lora layers. Call "
+                "`model.merge_lora_layers()` before saving, cloning, or "
+                f"serializing a model. Received: model={self}"
+            )
         # Don't chain to super here. The default `get_config()` for functional
         # models is nested and cannot be passed to our Task constructors.
         return {
