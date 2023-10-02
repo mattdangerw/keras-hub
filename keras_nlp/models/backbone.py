@@ -188,7 +188,10 @@ class Backbone(keras.Model):
         # Transformer block sharding
         layout_map[r".*(query|key|value)/kernel"] = [None, None, model_dim]
         layout_map[r".*(query|key|value)/bias"] = [model_dim, None]
-        layout_map[r".*feedforward_intermediate_dense/kernel"] = [None, model_dim]
+        layout_map[r".*feedforward_intermediate_dense/kernel"] = [
+            None,
+            model_dim,
+        ]
         layout_map[r".*feedforward_intermediate_dense/bias"] = [model_dim]
         layout_map[r".*feedforward_output_dense/kernel"] = [model_dim, None]
         layout_map[r".*feedforward_output_dense/bias"] = [None]

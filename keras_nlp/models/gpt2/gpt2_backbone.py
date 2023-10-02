@@ -233,7 +233,10 @@ class GPT2Backbone(Backbone):
         # Transformer block sharding
         layout_map[".*(query|key|value)/kernel"] = [None, None, model_dim]
         layout_map[".*(query|key|value)/bias"] = [model_dim, None]
-        layout_map[".*feedforward_intermediate_dense/kernel"] = [None, model_dim]
+        layout_map[".*feedforward_intermediate_dense/kernel"] = [
+            None,
+            model_dim,
+        ]
         layout_map[".*feedforward_intermediate_dense/bias"] = [model_dim]
         layout_map[".*feedforward_output_dense/kernel"] = [model_dim, None]
         layout_map[".*feedforward_output_dense/bias"] = [None]
