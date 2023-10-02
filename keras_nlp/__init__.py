@@ -12,13 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# sentencepiece is segfaulting on tf-nightly if tensorflow is imported first.
-# This is a temporary fix to restore our nightly testing to green, while we look
-# for a longer term solution.
-try:
-    import sentencepiece
-except ImportError:
-    pass
+import types
+
+import keras
+
+if not hasattr(keras.optimizers, "legacy"):
+
+    def warning(*args, **kwargs):
+        raise RuntimeError(
+            "tensorflow.estimators and Keras 3 are not compatible."
+        )
+
+    legacy_optimizers = {
+        "Adagrad": warning,
+        "Adam": warning,
+        "Ftrl": warning,
+        "RMSprop": warning,
+        "SGD": warning,
+    }
+    keras.optimizers.legacy = types.SimpleNamespace()
+    keras.optimizers.legacy.Adagrad = warning
+    keras.optimizers.legacy.Adam = warning
+    keras.optimizers.legacy.Ftrl = warning
+    keras.optimizers.legacy.RMSprop = warning
+    keras.optimizers.legacy.SGD = warning
+
 
 from keras_nlp import layers
 from keras_nlp import metrics
