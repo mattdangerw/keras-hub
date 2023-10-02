@@ -142,3 +142,54 @@ class Backbone(keras.Model):
                 example_preset_name=next(iter(cls.presets), ""),
                 preset_names='", "'.join(cls.presets),
             )(cls.from_preset.__func__)
+
+    @classmethod
+    def create_layout_map(cls, device_mesh):
+        """Create a layout map for model parallel training.
+
+        This method takes in a `keras.distribution.DeviceMesh` and returns a
+        `keras.distribution.LayoutMap` that will correctly distribute weights
+        for a backbone in a model parallel setting.
+
+        Args:
+            device_mesh: A 2D `keras.distribution.DeviceMesh` describing the
+                arrangement of devices for running distributed computation. The
+                first dimension in the mesh is expected to be for data parallel
+                distribution, and the second for model parallel distribution.
+
+        Returns:
+            A `keras.distribution.LayoutMap` which contains the proper layout to
+            weights mapping for the model parallel setting.
+
+        Examples:
+        ```python
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(2, 4),
+            axis_names=('batch', 'model'),
+            devices=keras.distribution.list_devices(),
+        )
+        layout_map = keras_nlp.models.GPT2Backbone.create_layout_map(
+            device_mesh,
+        )
+        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        keras.distribution.set_distribution(distribution)
+        ```
+        """
+        # We assert the mesh is 2D, and assume the first mesh dim is for data
+        # parallel and the second dim is for model parallel.
+        mesh_shape = device_mesh.shape
+        if len(mesh_shape) != 2:
+            raise ValueError(f"Expect a 2D DeviceMesh, received {device_mesh}")
+        _, model_dim = device_mesh.axis_names
+
+        layout_map = keras.distribution.LayoutMap(device_mesh=device_mesh)
+        # Embedding sharding
+        layout_map[r".*embeddings"] = [None, model_dim]
+        # Transformer block sharding
+        layout_map[r".*(query|key|value)/kernel"] = [None, None, model_dim]
+        layout_map[r".*(query|key|value)/bias"] = [model_dim, None]
+        layout_map[r".*feedforward_intermediate_dense/kernel"] = [None, model_dim]
+        layout_map[r".*feedforward_intermediate_dense/bias"] = [model_dim]
+        layout_map[r".*feedforward_output_dense/kernel"] = [model_dim, None]
+        layout_map[r".*feedforward_output_dense/bias"] = [None]
+        return layout_map

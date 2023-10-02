@@ -14,10 +14,6 @@
 
 import copy
 
-from tensorflow.experimental import dtensor
-from tensorflow.experimental.dtensor import Layout
-from tensorflow.keras.dtensor.experimental import LayoutMap
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.position_embedding import PositionEmbedding
@@ -193,18 +189,16 @@ class GPT2Backbone(Backbone):
         return copy.deepcopy(backbone_presets)
 
     @classmethod
-    def create_layout_map(cls, mesh):
-        """Create a DTensor layout map for a GPT2Backbone.
+    def create_layout_map(cls, device_mesh):
+        """Create a layout map for model parallel training.
 
-        Given a DTensor mesh describing a list of devices, this method returns a
-        DTensor layout map for creating a `keras_nlp.models.GPT2Backbone`
-        instance. This mapping describes how to distribute all model weights
-        across multiple devices. For an overview of DTensor concepts, see
-        [this guide](https://www.tensorflow.org/guide/dtensor_overview).
+        This method takes in a `keras.distribution.DeviceMesh` and returns a
+        `keras.distribution.LayoutMap` that will correctly distribute weights
+        for a `keras_nlp.models.GPT2Backbone in a model parallel setting.
 
         Args:
-            mesh: A 2D `tf.experimental.dtensor.Mesh` describing the arrangement
-                of devices for running distributed computation. The
+            device_mesh: A 2D `keras.distribution.DeviceMesh` describing the
+                arrangement of devices for running distributed computation. The
                 first dimension in the mesh is expected to be for data parallel
                 distribution, and the second for model parallel distribution.
 
@@ -214,48 +208,33 @@ class GPT2Backbone(Backbone):
 
         Examples:
         ```python
-        keras.backend.experimental.enable_tf_random_generator()
-        keras.utils.set_random_seed(1337)
-
-        # Update both dimensions below for a multi-device setting.
-        mesh = dtensor.create_mesh([("batch", 1), ("model", 1)])
-        layout_map = keras_nlp.models.GPT2Backbone.create_layout_map(mesh)
-
-        with layout_map.scope():
-            model = keras_nlp.models.GPT2Backbone.from_preset("gpt2_base_en")
+        device_mesh = keras.distribution.DeviceMesh(
+            shape=(2, 4),
+            axis_names=('batch', 'model'),
+            devices=keras.distribution.list_devices(),
+        )
+        layout_map = keras_nlp.models.GPT2Backbone.create_layout_map(
+            device_mesh,
+        )
+        distribution = keras.distribution.ModelParallel(device_mesh, layout_map)
+        keras.distribution.set_distribution(distribution)
         ```
         """
         # We assert the mesh is 2D, and assume the first mesh dim is for data
         # parallel and the second dim is for model parallel.
-        mesh_shape = mesh.shape()
+        mesh_shape = device_mesh.shape
         if len(mesh_shape) != 2:
-            raise ValueError(
-                f"Expect to create layout based on 2D mesh, received {mesh}"
-            )
-        _, model_dim = mesh.dim_names
-        unshard_dim = dtensor.UNSHARDED
+            raise ValueError(f"Expect a 2D DeviceMesh, received {device_mesh}")
+        _, model_dim = device_mesh.axis_names
 
-        layout_map = LayoutMap(mesh=mesh)
+        layout_map = keras.distribution.LayoutMap(device_mesh=device_mesh)
         # Embedding sharding
-        layout_map[r".*embeddings"] = Layout([unshard_dim, model_dim], mesh)
-
+        layout_map[".*embeddings"] = [None, model_dim]
         # Transformer block sharding
-        layout_map[r".*_(query|key|value)_dense.kernel"] = Layout(
-            [unshard_dim, unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_(query|key|value)_dense.bias"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.kernel"] = Layout(
-            [unshard_dim, model_dim], mesh
-        )
-        layout_map[r".*_feedforward_intermediate_dense.bias"] = Layout(
-            [model_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.kernel"] = Layout(
-            [model_dim, unshard_dim], mesh
-        )
-        layout_map[r".*_feedforward_output_dense.bias"] = Layout(
-            [unshard_dim], mesh
-        )
+        layout_map[".*(query|key|value)/kernel"] = [None, None, model_dim]
+        layout_map[".*(query|key|value)/bias"] = [model_dim, None]
+        layout_map[".*feedforward_intermediate_dense/kernel"] = [None, model_dim]
+        layout_map[".*feedforward_intermediate_dense/bias"] = [model_dim]
+        layout_map[".*feedforward_output_dense/kernel"] = [model_dim, None]
+        layout_map[".*feedforward_output_dense/bias"] = [None]
         return layout_map
