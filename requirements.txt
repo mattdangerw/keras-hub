@@ -1,6 +1,6 @@
 # Tensorflow.
-tensorflow>=2.14.0
-tensorflow-text>=2.14.0.rc0
+tf-nightly
+tensorflow-text-nightly
 
 # Torch.
 --extra-index-url https://download.pytorch.org/whl/cpu
