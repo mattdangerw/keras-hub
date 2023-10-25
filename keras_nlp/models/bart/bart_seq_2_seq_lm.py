@@ -222,70 +222,19 @@ class BartSeq2SeqLM(GenerativeTask):
     def preprocessor_cls(cls):
         return BartSeq2SeqLMPreprocessor
 
-    def call_decoder_with_cache(
+    def call_decoder(
         self,
         encoder_hidden_states,
         encoder_padding_mask,
         decoder_token_ids,
-        self_attention_cache=None,
-        self_attention_cache_update_index=None,
-        cross_attention_cache=None,
-        cross_attention_cache_update_index=None,
     ):
-        """Forward pass with a key/value caches for generative decoding..
-
-        `call_decoder_with_cache` adds an additional inference-time forward pass
-        for the model for seq2seq text generation. Unlike calling the model
-        directly, this method does two things to optimize text generation:
-
-        - Allows caching previous key/value tensors in the decoder's
-          self-attention layer to avoid recomputing the outputs of seen tokens.
-        - Allows caching key/value tensors in the decoder's cross-attention
-          layer to avoid recomputing the encoder outputs.
-
-        Args:
-            encoder_hidden_states: a dense float Tensor of shape
-                `(batch_size, encoder_sequence_length, hidden_dim)`. The
-                sequence of hidden states at the output of the encoder's last
-                layer.
-            encoder_padding_mask: a dense float Tensor of shape
-                `(batch_size, encoder_sequence_length)`. The padding mask for
-                the encoder input.
-            decoder_token_ids: a dense int Tensor of shape
-                `(batch_size, max_length)`. Input token ids to be fed to
-                the decoder.
-            self_attention_cache: a dense float Tensor of shape
-                `(batch_size, num_layers, 2, max_length, num_heads, key_dims)`.
-                The cached key/value tensors of previously seen tokens in the
-                decoder's self-attention layer.
-            self_attention_cache_update_index: an int or int Tensor, the index
-                at which to update the `self_attention_cache`. Usually, this is
-                the index of the current token being processed during decoding.
-            cross_attention_cache: a dense float Tensor of shape
-                `(batch_size, num_layers, 2, encoder_sequence_length, num_heads, key_dims)`.
-                The cached key/value tensors of the encoder outputs in the
-                decoder's cross-attention layer.
-            cross_attention_cache_update_index: an int or int Tensor, the index
-                at which to update the `cross_attention_cache`. Usually, this is
-                either `0` (compute the entire `cross_attention_cache`), or
-                `None` (reuse a previously computed `cross_attention_cache`).
-
-        Returns:
-            A `(logits, hidden_states, self_attention_cache, cross_attention_cache)`
-            tuple, where `logits` is the language model logits for the input
-            `decoder_token_ids`, `hidden_states` is the final hidden
-            representation of the input tokens, `self_attention_cache` is the
-            key/value cache in the decoder's self-attention layer and
-            `cross_attention_cache` is the key/value cache in the decoder's
-            cross-attention layer.
-        """
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(
             decoder_token_ids
         )
         position_embedding = self.backbone.get_layer(
             "decoder_position_embedding"
-        )(token_embedding, start_index=self_attention_cache_update_index)
+        )(token_embedding)
 
         # Sum, normalize and apply dropout to embeddings.
         x = self.backbone.get_layer("decoder_embeddings_add")(
@@ -294,50 +243,18 @@ class BartSeq2SeqLM(GenerativeTask):
         x = self.backbone.get_layer("decoder_embeddings_layer_norm")(x)
         x = self.backbone.get_layer("decoder_embeddings_dropout")(x)
 
-        # Every decoder layer has a separate cache for the self-attention layer
-        # and the cross-attention layer. We update all of them separately.
-        self_attention_caches = []
-        cross_attention_caches = []
         for i in range(self.backbone.num_layers):
-            current_self_attention_cache = self_attention_cache[:, i, ...]
-            current_cross_attention_cache = cross_attention_cache[:, i, ...]
-
-            (
-                x,
-                next_self_attention_cache,
-                next_cross_attention_cache,
-            ) = self.backbone.get_layer(f"transformer_decoder_layer_{i}")(
+            x = self.backbone.get_layer(f"transformer_decoder_layer_{i}")(
                 decoder_sequence=x,
                 encoder_sequence=encoder_hidden_states,
                 encoder_padding_mask=encoder_padding_mask,
-                self_attention_cache=current_self_attention_cache,
-                self_attention_cache_update_index=self_attention_cache_update_index,
-                cross_attention_cache=current_cross_attention_cache,
-                cross_attention_cache_update_index=cross_attention_cache_update_index,
             )
-
-            if self_attention_cache_update_index is not None:
-                self_attention_caches.append(next_self_attention_cache)
-            if cross_attention_cache_update_index is not None:
-                cross_attention_caches.append(next_cross_attention_cache)
-
-        if self_attention_cache_update_index is not None:
-            self_attention_cache = ops.stack(self_attention_caches, axis=1)
-        if cross_attention_cache_update_index is not None:
-            cross_attention_cache = ops.stack(cross_attention_caches, axis=1)
 
         hidden_states = x
         logits = self.backbone.token_embedding(hidden_states, reverse=True)
-        return (
-            logits,
-            hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        )
+        return logits, hidden_states
 
     def call_encoder(self, token_ids, padding_mask):
-        """Does a forward pass on the encoder and returns the encoder output."""
-
         # Embedding layers.
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer(
@@ -358,64 +275,6 @@ class BartSeq2SeqLM(GenerativeTask):
             )
 
         return x
-
-    def _initialize_cache(self, encoder_token_ids, decoder_token_ids):
-        """Initializes empty self-attention cache and cross-attention cache."""
-        batch_size = ops.shape(encoder_token_ids)[0]
-        encoder_max_length = ops.shape(encoder_token_ids)[1]
-        decoder_max_length = ops.shape(decoder_token_ids)[1]
-
-        num_layers = self.backbone.num_layers
-        num_heads = self.backbone.num_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-
-        shape = [
-            batch_size,
-            num_layers,
-            2,
-            decoder_max_length,
-            num_heads,
-            head_dim,
-        ]
-        self_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
-
-        shape[3] = encoder_max_length
-        cross_attention_cache = ops.zeros(shape, dtype=self.compute_dtype)
-
-        return (self_attention_cache, cross_attention_cache)
-
-    def _build_cache(
-        self, encoder_token_ids, encoder_padding_mask, decoder_token_ids
-    ):
-        """Builds the self-attention cache and the cross-attention cache (key/value pairs)."""
-        encoder_hidden_states = self.call_encoder(
-            token_ids=encoder_token_ids, padding_mask=encoder_padding_mask
-        )
-        self_attention_cache, cross_attention_cache = self._initialize_cache(
-            encoder_token_ids, decoder_token_ids
-        )
-
-        # Seed the self-attention cache and the cross-attention cache.
-        (
-            _,
-            hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        ) = self.call_decoder_with_cache(
-            encoder_hidden_states=encoder_hidden_states,
-            encoder_padding_mask=encoder_padding_mask,
-            decoder_token_ids=decoder_token_ids,
-            self_attention_cache=self_attention_cache,
-            self_attention_cache_update_index=0,
-            cross_attention_cache=cross_attention_cache,
-            cross_attention_cache_update_index=0,
-        )
-        return (
-            hidden_states,
-            encoder_hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        )
 
     def generate_step(
         self,
@@ -453,13 +312,13 @@ class BartSeq2SeqLM(GenerativeTask):
         batch_size = ops.shape(encoder_token_ids)[0]
 
         # Create and seed cache with a single forward pass.
-        (
-            hidden_states,
-            encoder_hidden_states,
-            self_attention_cache,
-            cross_attention_cache,
-        ) = self._build_cache(
-            encoder_token_ids, encoder_padding_mask, decoder_token_ids
+        encoder_hidden_states = self.call_encoder(
+            token_ids=encoder_token_ids, padding_mask=encoder_padding_mask
+        )
+        _, hidden_states = self.call_decoder(
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_padding_mask=encoder_padding_mask,
+            decoder_token_ids=decoder_token_ids,
         )
         # Compute the lengths of all user inputted tokens ids.
         row_lengths = ops.sum(ops.cast(decoder_padding_mask, "int32"), axis=-1)
@@ -467,10 +326,7 @@ class BartSeq2SeqLM(GenerativeTask):
         index = ops.min(row_lengths)
 
         def next(prompt, cache, index):
-            # The cache index is the index of our previous token.
-            cache_index = index - 1
             num_samples = ops.shape(prompt)[0]
-            prompt = ops.slice(prompt, [0, cache_index], [num_samples, 1])
 
             def repeat_tensor(x):
                 """Repeats tensors along batch axis to match dim for beam search."""
@@ -478,25 +334,19 @@ class BartSeq2SeqLM(GenerativeTask):
                     return x
                 return ops.repeat(x, repeats=num_samples // batch_size, axis=0)
 
-            logits, hidden_states, cache, _ = self.call_decoder_with_cache(
+            logits, hidden_states = self.call_decoder(
                 encoder_hidden_states=repeat_tensor(encoder_hidden_states),
                 encoder_padding_mask=repeat_tensor(encoder_padding_mask),
                 decoder_token_ids=prompt,
-                self_attention_cache=cache,
-                self_attention_cache_update_index=cache_index,
-                cross_attention_cache=repeat_tensor(cross_attention_cache),
-                cross_attention_cache_update_index=None,
             )
-            return (
-                ops.squeeze(logits, axis=1),
-                ops.squeeze(hidden_states, axis=1),
-                cache,
-            )
+            # Slice the last state, this will go away when we add the cache.
+            logits = logits[:, index - 1, :]
+            hidden_states = hidden_states[:, index - 1, :]
+            return logits, hidden_states, cache
 
         decoder_token_ids = self._sampler(
             next=next,
             prompt=decoder_token_ids,
-            cache=self_attention_cache,
             index=index,
             mask=decoder_padding_mask,
             end_token_id=end_token_id,

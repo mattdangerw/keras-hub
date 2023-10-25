@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import patch
-
 import pytest
 
-from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
 from keras_nlp.models.bart.bart_seq_2_seq_lm import BartSeq2SeqLM
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
@@ -97,43 +94,6 @@ class BartSeq2SeqLMTest(TestCase):
             outputs["decoder_padding_mask"][:, :5],
             preprocessed_batch["decoder_padding_mask"][:, :5],
         )
-
-    def test_early_stopping(self):
-        seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
-        call_decoder_with_cache = seq_2_seq_lm.call_decoder_with_cache
-
-        def wrapper(*args, **kwargs):
-            """Modify output logits to always favor end_token_id"""
-            (
-                logits,
-                hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
-            ) = call_decoder_with_cache(*args, **kwargs)
-            index = self.preprocessor.tokenizer.end_token_id
-            update = ops.ones_like(logits)[:, :, index] * 1.0e9
-            update = ops.expand_dims(update, axis=-1)
-            logits = ops.slice_update(logits, (0, 0, index), update)
-            return (
-                logits,
-                hidden_states,
-                self_attention_cache,
-                cross_attention_cache,
-            )
-
-        with patch.object(
-            seq_2_seq_lm, "call_decoder_with_cache", wraps=wrapper
-        ):
-            inputs = {
-                "encoder_text": [
-                    " airplane at airport",
-                    " airplane at airport",
-                ],
-                "decoder_text": [" airplane at", " airplane"],
-            }
-            output = seq_2_seq_lm.generate(inputs)
-            # We should immediately abort and output the prompt.
-            self.assertAllEqual(inputs["decoder_text"], output)
 
     def test_generate_compilation(self):
         seq_2_seq_lm = BartSeq2SeqLM(**self.init_kwargs)
