@@ -24,7 +24,7 @@ if config.backend() == "tensorflow":
     from tensorflow.experimental import numpy as tfnp
 
     def take_along_axis(x, indices, axis=None):
-        # TODO: move this workaround for dynamic shapes into keras-core.
+        # TODO: move this workaround for dynamic shapes into keras.
         if axis < 0:
             axis = axis + indices.shape.rank
         # If all shapes after axis are 1, squeeze them off and use tf.gather.
