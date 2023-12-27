@@ -29,8 +29,11 @@ class Backbone(keras.Model):
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
         )
+        self._loading_old_preset = False
 
     def __dir__(self):
+        if self._loading_old_preset:
+            return super().__dir__()
         # Temporary fixes for weight saving. This mimics the following PR for
         # older version of Keras: https://github.com/keras-team/keras/pull/18982
         def filter_fn(attr):
@@ -103,7 +106,9 @@ class Backbone(keras.Model):
             file_hash=metadata["weights_hash"],
         )
 
+        model._loading_old_preset = True
         model.load_weights(weights)
+        model._loading_old_preset = False
         return model
 
     @classmethod
