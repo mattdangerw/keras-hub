@@ -304,6 +304,7 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         input_data,
         expected_output_shape,
         variable_length_data=None,
+        run_mixed_precision_check=True,
     ):
         """Run basic tests for a backbone, including compilation."""
         backbone = cls(**init_kwargs)
@@ -344,6 +345,22 @@ class TestCase(tf.test.TestCase, parameterized.TestCase):
         name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", cls.__name__)
         name = re.sub("([a-z])([A-Z])", r"\1_\2", name).lower()
         self.assertRegexpMatches(backbone.name, name)
+
+        # Never test mixed precision on torch CPU. Torch lacks support.
+        if run_mixed_precision_check and config.backend() == "torch":
+            import torch
+
+            run_mixed_precision_check = torch.cuda.is_available()
+
+        if run_mixed_precision_check:
+            backbone = cls(**{**init_kwargs, "dtype": "mixed_float16"})
+            output_data = backbone(input_data)
+            for tensor in tree.flatten(output_data):
+                if is_float_dtype(tensor.dtype):
+                    self.assertDTypeEqual(tensor, "float16")
+            for weight in backbone.weights:
+                if is_float_dtype(weight.dtype):
+                    self.assertDTypeEqual(weight, "float32")
 
     def run_task_test(
         self,

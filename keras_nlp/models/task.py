@@ -166,6 +166,7 @@ class Task(PipelineModel):
         cls,
         preset,
         load_weights=True,
+        dtype=None,
         **kwargs,
     ):
         """Instantiate {{model_task_name}} model from preset architecture and weights.

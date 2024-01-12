@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
@@ -21,12 +22,16 @@ from keras_nlp.utils.python_utils import format_docstring
 
 @keras.saving.register_keras_serializable(package="keras_nlp")
 class Backbone(keras.Model):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs, dtype=None):
         super().__init__(*args, **kwargs)
         self._token_embedding = None
         self._functional_layer_ids = set(
             id(layer) for layer in self._flatten_layers()
         )
+        if config.keras_3():
+            self.dtype_policy = keras.mixed_precision.Policy(dtype)
+        else:
+            self._dtype_policy = keras.mixed_precision.Policy(dtype)
 
     def __dir__(self):
         # Temporary fixes for weight saving. This mimics the following PR for

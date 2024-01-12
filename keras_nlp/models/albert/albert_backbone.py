@@ -110,6 +110,7 @@ class AlbertBackbone(Backbone):
         dropout=0.0,
         max_sequence_length=512,
         num_segments=2,
+        dtype=None,
         **kwargs,
     ):
         if num_layers % num_groups != 0:
@@ -136,18 +137,21 @@ class AlbertBackbone(Backbone):
             input_dim=vocabulary_size,
             output_dim=embedding_dim,
             embeddings_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="token_embedding",
         )
         token_embedding = token_embedding_layer(token_id_input)
         position_embedding = PositionEmbedding(
             initializer=albert_kernel_initializer(),
             sequence_length=max_sequence_length,
+            dtype=dtype,
             name="position_embedding",
         )(token_embedding)
         segment_embedding = keras.layers.Embedding(
             input_dim=num_segments,
             output_dim=embedding_dim,
             embeddings_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="segment_embedding",
         )(segment_id_input)
 
@@ -156,13 +160,15 @@ class AlbertBackbone(Backbone):
             (token_embedding, position_embedding, segment_embedding)
         )
         x = keras.layers.LayerNormalization(
-            name="embeddings_layer_norm",
             axis=-1,
             epsilon=1e-12,
-            dtype="float32",
+            # Note layernorm computes a full precision regardless of dtype.
+            dtype=dtype,
+            name="embeddings_layer_norm",
         )(x)
         x = keras.layers.Dropout(
             dropout,
+            dtype=dtype,
             name="embeddings_dropout",
         )(x)
 
@@ -170,6 +176,7 @@ class AlbertBackbone(Backbone):
         x = keras.layers.Dense(
             hidden_dim,
             kernel_initializer=albert_kernel_initializer(),
+            dtype=dtype,
             name="embedding_projection",
         )(x)
 
@@ -185,6 +192,7 @@ class AlbertBackbone(Backbone):
                     dropout=dropout,
                     layer_norm_epsilon=1e-12,
                     kernel_initializer=albert_kernel_initializer(),
+                    dtype=dtype,
                     name=f"group_{group_idx}_inner_layer_{inner_idx}",
                 )
                 for inner_idx in range(num_inner_repetitions)
@@ -215,6 +223,7 @@ class AlbertBackbone(Backbone):
             hidden_dim,
             kernel_initializer=albert_kernel_initializer(),
             activation="tanh",
+            dtype=dtype,
             name="pooled_dense",
         )(x[:, cls_token_index, :])
 
