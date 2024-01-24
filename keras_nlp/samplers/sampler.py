@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from keras_nlp.api_export import keras_nlp_export
-from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.backend import random
@@ -111,58 +110,81 @@ class Sampler:
             variables.append(sg.state)
         return variables
 
-    def __call__(
+    def start(
         self,
-        next,
-        prompt,
-        cache=None,
-        index=0,
-        mask=None,
-        end_token_id=None,
-        hidden_states=None,
+        data,
+        logits,
+        hidden_states,
+        cache,
     ):
-        max_length = ops.shape(prompt)[-1]
-        # Make sure `max_length` and `index` are the same dtype.
-        index = ops.cast(index, "int32")
-        max_length = ops.cast(max_length, "int32")
-        if mask is None:
-            mask = ops.zeros_like(prompt, dtype="bool")
-        else:
-            mask = ops.cast(mask, dtype="bool")
-        # `ops.while_loop` will not accept `None` as a value for `loop_vars`.
-        cache = () if cache is None else cache
-
-        def cond(prompt, cache, index):
-            if end_token_id is None:
-                return True
-            # Stop if all sequences have produced a *new* end_token_id.
-            end_tokens = (prompt == end_token_id) & (~mask)
-            prompt_done = ops.any(end_tokens, axis=-1)
-            return ops.logical_not(ops.all(prompt_done))
-
-        def body(prompt, cache, index):
-            # Compute the softmax distribution for the next token.
-            logits, _, cache = next(prompt, cache, index)
-            probabilities = self.compute_probabilities(logits)
-            # Compute the next token.
-            next_token = self.get_next_token(probabilities)
-            # Don't overwrite anywhere mask is True.
-            next_token = ops.cast(next_token, prompt.dtype)
-            next_token = ops.where(mask[:, index], prompt[:, index], next_token)
-            # Update the prompt with the next token.
-            next_token = next_token[:, None]
-            prompt = ops.slice_update(prompt, [0, index], next_token)
-
-            # Return the next prompt, cache and incremented index.
-            return (prompt, cache, index + 1)
-
-        prompt, _, _ = self.run_loop(
-            cond,
-            body,
-            loop_vars=(prompt, cache, index),
-            maximum_iterations=(max_length - index),
+        padding_mask = data["padding_mask"]
+        # Compute the lengths of all user inputted tokens ids.
+        row_lengths = ops.sum(padding_mask, axis=-1)
+        # Start at the last index that has all user inputted ids.
+        index = ops.min(row_lengths) - 1
+        logits = logits[:, index][:, None]
+        hidden_states = hidden_states[:, index][:, None]
+        return self.next(
+            data=data,
+            index=index,
+            logits=logits,
+            hidden_states=hidden_states,
+            cache=cache,
         )
-        return prompt
+
+    def alive(
+        self,
+        data,
+        index,
+        end_token_id=None,
+    ):
+        token_ids = data["token_ids"]
+        padding_mask = data["padding_mask"]
+        _, max_length = ops.shape(token_ids)
+        length_remaining = ops.less(index, max_length - 1)
+        if end_token_id is None:
+            return length_remaining
+        end_tokens = ops.equal(token_ids, end_token_id)
+        end_tokens = ops.logical_and(end_tokens, ops.equal(padding_mask, 2))
+        sequence_done = ops.any(end_tokens, axis=-1)
+        any_alive = ops.logical_not(ops.all(sequence_done))
+        return ops.logical_and(length_remaining, any_alive)
+
+    def next(
+        self,
+        data,
+        index,
+        logits,
+        hidden_states,
+        cache,
+    ):
+        token_ids = data["token_ids"]
+        padding_mask = data["padding_mask"]
+        probabilities = self.compute_probabilities(logits)
+        # Compute the next token.
+        new_tokens = self.get_next_token(probabilities)
+        # Update tokens at the following index.
+        index = index + 1
+        padding_column = padding_mask[:, index][:, None]
+        token_column = token_ids[:, index][:, None]
+        # Don't overwrite anywhere mask is True.
+        new_tokens = ops.cast(new_tokens, token_ids.dtype)
+        new_tokens = ops.where(padding_column, token_column, new_tokens)
+        new_padding = ops.ones_like(new_tokens) * 2
+        new_padding = ops.where(padding_column, padding_column, new_padding)
+        # Update the prompt with the next token.
+        token_ids = ops.slice_update(token_ids, [0, index], new_tokens)
+        padding_mask = ops.slice_update(padding_mask, [0, index], new_padding)
+        data["token_ids"] = token_ids
+        data["padding_mask"] = padding_mask
+        data["cache"] = cache
+        return data, index
+
+    def end(
+        self,
+        data,
+    ):
+        return data
 
     def compute_probabilities(self, logits):
         """Compute token probabilities from logits.
@@ -174,41 +196,6 @@ class Sampler:
         logits = ops.cast(logits, "float32")
         probs = keras.activations.softmax(logits / self.temperature)
         return ops.cast(probs, logits_dtype)
-
-    def run_loop(self, cond, body, loop_vars=None, maximum_iterations=None):
-        """Run ops.while_loops with a `StatelessScope` if necessary."""
-        if config.backend() == "jax":
-
-            def stateless_cond(variables, *loop_vars):
-                return cond(*loop_vars)
-
-            def stateless_body(variables, *loop_vars):
-                mapping = zip(self.variables, variables)
-                with keras.StatelessScope(state_mapping=mapping) as scope:
-                    loop_vars = body(*loop_vars)
-
-                variables = []
-                for v in self.variables:
-                    new_v = scope.get_current_value(v)
-                    variables.append(new_v if new_v is not None else v)
-                return variables, *loop_vars
-
-            variables = [ops.convert_to_tensor(v) for v in self.variables]
-            variables, *loop_vars = ops.while_loop(
-                cond=stateless_cond,
-                body=stateless_body,
-                loop_vars=(variables, *loop_vars),
-                maximum_iterations=maximum_iterations,
-            )
-            [ref_v.assign(v) for ref_v, v in zip(self.variables, variables)]
-        else:
-            loop_vars = ops.while_loop(
-                cond=cond,
-                body=body,
-                loop_vars=(loop_vars),
-                maximum_iterations=maximum_iterations,
-            )
-        return loop_vars
 
     def get_next_token(self, probabilities):
         """Get the next token.

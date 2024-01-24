@@ -191,34 +191,22 @@ class GPT2CausalLM(GenerativeTask):
     def preprocessor_cls(cls):
         return GPT2CausalLMPreprocessor
 
+    def create_cache(self, batch_size, max_length):
+        num_layers = self.backbone.num_layers
+        num_heads = self.backbone.num_heads
+        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
+        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
+        return ops.zeros(shape, dtype=self.compute_dtype)
+
     def call_with_cache(
         self,
         token_ids,
         cache,
-        cache_update_index,
+        index,
     ):
-        """Forward pass of `GPT2CausalLM` with cache.
-
-        `call_with_cache` adds an additional forward pass for the model for
-        autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous key/value Tensors in multi-head attention layer,
-        and avoids recomputing the outputs of seen tokens.
-
-        Args:
-            token_ids: a dense int Tensor with shape `(batch_size, max_length)`.
-            cache: a dense float Tensor, the cache of key and value.
-            cache_update_index: int, or int Tensor. The index of current inputs in the
-                whole sequence.
-
-        Returns:
-            A (logits, hidden_states, cache) tuple. Where `logits` is the
-            language model logits for the input token_ids, `hidden_states` is
-            the final hidden representation of the input tokens, and `cache` is
-            the decoding cache.
-        """
         token_embedding = self.backbone.get_layer("token_embedding")(token_ids)
         position_embedding = self.backbone.get_layer("position_embedding")(
-            token_embedding, start_index=cache_update_index
+            token_embedding, start_index=index
         )
         x = self.backbone.get_layer("embeddings_add")(
             (token_embedding, position_embedding)
@@ -231,97 +219,10 @@ class GPT2CausalLM(GenerativeTask):
             x, next_cache = self.backbone.get_layer(f"transformer_layer_{i}")(
                 x,
                 self_attention_cache=current_cache,
-                self_attention_cache_update_index=cache_update_index,
+                self_attention_cache_update_index=index,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
         hidden_states = x = self.backbone.get_layer("layer_norm")(x)
         logits = self.backbone.get_layer("token_embedding")(x, reverse=True)
         return logits, hidden_states, cache
-
-    def _build_cache(self, token_ids):
-        """Build an empty cache for use with `call_with_cache()`."""
-        batch_size = ops.shape(token_ids)[0]
-        max_length = ops.shape(token_ids)[1]
-        num_layers = self.backbone.num_layers
-        num_heads = self.backbone.num_heads
-        head_dim = self.backbone.hidden_dim // self.backbone.num_heads
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        cache = ops.zeros(shape, dtype=self.compute_dtype)
-        # Seed the cache.
-        _, hidden_states, cache = self.call_with_cache(token_ids, cache, 0)
-        return hidden_states, cache
-
-    def generate_step(
-        self,
-        inputs,
-        end_token_id=None,
-    ):
-        """A compilable generation function for a single batch of inputs.
-
-        This function represents the inner, XLA-compilable, generation function
-        for a single batch of inputs. Inputs should have the same structure as
-        model inputs, a dictionary with keys `"token_ids"` and `"padding_mask"`.
-
-        Args:
-            inputs: A dictionary with two keys `"token_ids"` and
-                `"padding_mask"` and batched tensor values.
-            end_token_id: The id of the end token to stop on. If all
-                sequences have produced a new `end_token_id`, generation
-                will stop.
-        """
-        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
-        # Create and seed cache with a single forward pass.
-        hidden_states, cache = self._build_cache(token_ids)
-        # Compute the lengths of all user inputted tokens ids.
-        row_lengths = ops.sum(ops.cast(padding_mask, "int32"), axis=-1)
-        # Start at the first index that has no user inputted id.
-        index = ops.min(row_lengths)
-
-        def next(prompt, cache, index):
-            # The cache index is the index of our previous token.
-            cache_update_index = index - 1
-            batch_size = ops.shape(prompt)[0]
-            prompt = ops.slice(prompt, [0, cache_update_index], [batch_size, 1])
-            logits, hidden_states, cache = self.call_with_cache(
-                prompt,
-                cache,
-                cache_update_index,
-            )
-            return (
-                ops.squeeze(logits, axis=1),
-                ops.squeeze(hidden_states, axis=1),
-                cache,
-            )
-
-        token_ids = self._sampler(
-            next=next,
-            prompt=token_ids,
-            cache=cache,
-            index=index,
-            mask=padding_mask,
-            end_token_id=end_token_id,
-            hidden_states=hidden_states,
-        )
-
-        # Compute an output padding mask with the token ids we updated.
-        if end_token_id is not None:
-            # Build a mask of `end_token_id` locations not in the original
-            # prompt (not in locations where `padding_mask` is True).
-            end_locations = ops.logical_and(
-                ops.equal(token_ids, end_token_id),
-                ops.logical_not(padding_mask),
-            )
-            end_locations = ops.cast(end_locations, "int32")
-            # Use cumsum to get ones in all locations after end_locations.
-            cumsum = ops.cast(ops.cumsum(end_locations, axis=-1), "int32")
-            overflow = cumsum - end_locations
-            # Our padding mask is the inverse of these overflow locations.
-            padding_mask = ops.logical_not(ops.cast(overflow, "bool"))
-        else:
-            # Without early stopping, all locations will have been updated.
-            padding_mask = ops.ones_like(token_ids, dtype="bool")
-        return {
-            "token_ids": token_ids,
-            "padding_mask": padding_mask,
-        }
