@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_preset_class
 from keras_nlp.utils.preset_utils import load_from_preset
@@ -19,7 +20,7 @@ from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Backbone")
 class Backbone(keras.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,29 +38,6 @@ class Backbone(keras.Model):
             return id(getattr(self, attr)) not in self._functional_layer_ids
 
         return filter(filter_fn, super().__dir__())
-
-    def __setattr__(self, name, value):
-        # Work around torch setattr for properties.
-        if name in ["token_embedding"]:
-            return object.__setattr__(self, name, value)
-        return super().__setattr__(name, value)
-
-    @property
-    def token_embedding(self):
-        """A `keras.layers.Embedding` instance for embedding token ids.
-
-        This layer integer token ids to the hidden dim of the model.
-        """
-        return self._token_embedding
-
-    @token_embedding.setter
-    def token_embedding(self, value):
-        # Workaround tf.keras h5 checkpoint loading, which is sensitive to layer
-        # count mismatches and does not deduplicate layers. This could go away
-        # if we update our checkpoints to the newer `.weights.h5` format.
-        self._setattr_tracking = False
-        self._token_embedding = value
-        self._setattr_tracking = True
 
     def get_config(self):
         # Don't chain to super here. The default `get_config()` for functional
