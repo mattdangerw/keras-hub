@@ -82,13 +82,17 @@ class GemmaTokenizer(SentencePieceTokenizer):
         self.start_token = "<bos>"
         self.end_token = "<eos>"
         self.pad_token = "<pad>"
+        self.start_of_turn_token = "<start_of_turn>"
+        self.end_of_turn_token = "<end_of_turn>"
+        self.user_token = "user"
+        self.model_token = "model"
 
         super().__init__(proto=proto, **kwargs)
 
     def set_proto(self, proto):
         super().set_proto(proto)
         if proto is not None:
-            for token in [self.end_token, self.pad_token]:
+            for token in [self.start_token, self.end_token, self.pad_token]:
                 if token not in self.get_vocabulary():
                     raise ValueError(
                         f"Cannot find token `'{token}'` in the provided "
@@ -98,10 +102,18 @@ class GemmaTokenizer(SentencePieceTokenizer):
             self.start_token_id = self.token_to_id(self.start_token)
             self.end_token_id = self.token_to_id(self.end_token)
             self.pad_token_id = self.token_to_id(self.pad_token)
+            self.start_of_turn_token_id = self.token_to_id(self.start_of_turn_token)
+            self.end_of_turn_token_id = self.token_to_id(self.end_of_turn_token)
+            self.user_token_id = self.token_to_id(self.user_token)
+            self.model_token_id = self.token_to_id(self.model_token)
         else:
             self.start_token_id = None
             self.end_token_id = None
             self.pad_token_id = None
+            self.start_of_turn_token_id = None
+            self.end_of_turn_token_id = None
+            self.user_token_id = None
+            self.model_token_id = None
 
     @classproperty
     def presets(cls):
