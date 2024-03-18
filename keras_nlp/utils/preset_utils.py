@@ -16,6 +16,7 @@ import datetime
 import json
 import os
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
@@ -27,6 +28,31 @@ except ImportError:
 KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
+# Global state for preset registry.
+_PRESET_CLASSES = set()
+_BUILTIN_PRESETS = {}
+
+
+@keras_nlp_export("keras_nlp.utils.register_preset_class")
+def register_preset_class():
+    def decorator(cls):
+        _PRESET_CLASSES.add(cls)
+        for preset in cls.presets:
+            _BUILTIN_PRESETS[preset] = cls.presets[preset]
+
+    return decorator
+
+
+def get_registered_presets(cls):
+    presets = {}
+    for x in get_registered_subclasses(cls):
+        if x is not cls and issubclass(x, cls):
+            presets.update(x.presets)
+    return presets
+
+
+def get_registered_subclasses(cls):
+    return list(filter(lambda x: issubclass(x, cls), _PRESET_CLASSES))
 
 
 def get_file(preset, path):
@@ -35,6 +61,8 @@ def get_file(preset, path):
         raise ValueError(
             f"A preset identifier must be a string. Received: preset={preset}"
         )
+    if preset in _BUILTIN_PRESETS:
+        preset = _BUILTIN_PRESETS[preset]["kaggle_handle"]
     if preset.startswith(KAGGLE_PREFIX):
         if kagglehub is None:
             raise ImportError(
@@ -194,25 +222,12 @@ def load_from_preset(
     return layer
 
 
-def check_preset_class(
+def check_config_class(
     preset,
-    classes,
     config_file="config.json",
 ):
     """Validate a preset is being loaded on the correct class."""
     config_path = get_file(preset, config_file)
     with open(config_path) as config_file:
         config = json.load(config_file)
-    cls = keras.saving.get_registered_object(config["registered_name"])
-    if not isinstance(classes, (tuple, list)):
-        classes = (classes,)
-    # Allow subclasses for testing a base class, e.g.
-    # `check_preset_class(preset, Backbone)`
-    if not any(issubclass(cls, x) for x in classes):
-        raise ValueError(
-            f"Unexpected class in preset `'{preset}'`. "
-            "When calling `from_preset()` on a class object, the preset class "
-            f"much match allowed classes. Allowed classes are `{classes}`. "
-            f"Received: `{cls}`."
-        )
-    return cls
+    return keras.saving.get_registered_object(config["registered_name"])

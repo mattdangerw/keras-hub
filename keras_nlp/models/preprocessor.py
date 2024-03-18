@@ -12,19 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_registered_presets
+from keras_nlp.utils.preset_utils import get_registered_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras.saving.register_keras_serializable(package="keras_nlp")
+@keras_nlp_export("keras_nlp.models.Preprocessor")
 class Preprocessor(PreprocessingLayer):
-    """Base class for model preprocessors."""
+    """Base class for preprocessing layers.
+
+    A `Preprocessor` layer wraps a `keras_nlp.tokenizer.Tokenizer` to provide a
+    complete preprocessing setup for a given task. For example a masked language
+    modeling preprocessor will take in raw input strings, and output
+    `(x, y, sample_weight)` tuples. Where `x` contains token id sequences with
+    some
+
+    This class can be subclassed to implement
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,7 +74,7 @@ class Preprocessor(PreprocessingLayer):
 
     @classproperty
     def presets(cls):
-        return {}
+        return get_registered_presets(cls)
 
     @classmethod
     def from_preset(
@@ -83,13 +95,32 @@ class Preprocessor(PreprocessingLayer):
         )
         ```
         """
-        # We support short IDs for official presets, e.g. `"bert_base_en"`.
-        # Map these to a Kaggle Models handle.
-        if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
-
+        if cls == Preprocessor:
+            raise ValueError(
+                "Do not call `Preprocessor.from_preset()` directly. Instead call a "
+                "choose a particular task class, e.g. "
+                "`keras_nlp.models.BertPreprocessor.from_preset()`."
+            )
         config_file = "tokenizer.json"
-        check_preset_class(preset, cls.tokenizer_cls, config_file=config_file)
+        preset_cls = check_config_class(preset, config_file=config_file)
+        subclasses = get_registered_subclasses(cls)
+        subclasses = tuple(
+            filter(lambda x: x.backbone_cls == preset_cls, subclasses)
+        )
+        if len(subclasses) == 0:
+            raise ValueError(
+                f"No registered subclass of `{cls.__name__}` can load "
+                f"a `Tokenizer` of class `{preset_cls.__name__}`. Try "
+                f"`print({cls.__name__}.presets)` to see a list of allowed "
+                "preset names."
+            )
+        if len(subclasses) > 2:
+            raise ValueError(
+                f"Ambiguous call to `{cls.__name__}.from_preset()`. Found "
+                f"multiple registered subclasses {subclasses}. Please call "
+                "`from_preset` on a subclass directly."
+            )
+        cls = subclasses[0]
         tokenizer = load_from_preset(
             preset,
             config_file=config_file,

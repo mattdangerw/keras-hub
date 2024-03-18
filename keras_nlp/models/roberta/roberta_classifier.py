@@ -16,16 +16,16 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.roberta.roberta_preprocessor import RobertaPreprocessor
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
-from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.RobertaClassifier")
-class RobertaClassifier(Task):
+class RobertaClassifier(Classifier):
     """An end-to-end RoBERTa model for classification tasks.
 
     This model attaches a classification head to a

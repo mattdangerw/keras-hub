@@ -16,6 +16,7 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import DebertaV3Backbone
 from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
     deberta_kernel_initializer,
@@ -24,12 +25,11 @@ from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
-from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Classifier")
-class DebertaV3Classifier(Task):
+class DebertaV3Classifier(Classifier):
     """An end-to-end DeBERTa model for classification tasks.
 
     This model attaches a classification head to a

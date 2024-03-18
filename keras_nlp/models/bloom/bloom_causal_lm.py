@@ -22,12 +22,12 @@ from keras_nlp.models.bloom.bloom_causal_lm_preprocessor import (
     BloomCausalLMPreprocessor,
 )
 from keras_nlp.models.bloom.bloom_presets import backbone_presets
-from keras_nlp.models.generative_task import GenerativeTask
+from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BloomCausalLM")
-class BloomCausalLM(GenerativeTask):
+class BloomCausalLM(CausalLM):
     """An end-to-end BLOOM model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous

@@ -17,7 +17,7 @@ import copy
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
-from keras_nlp.models.generative_task import GenerativeTask
+from keras_nlp.models.causal_lm import CausalLM
 from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
     OPTCausalLMPreprocessor,
@@ -27,7 +27,7 @@ from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.OPTCausalLM")
-class OPTCausalLM(GenerativeTask):
+class OPTCausalLM(CausalLM):
     """An end-to-end OPT model for causal language modeling.
 
     A causal language model (LM) predicts the next token based on previous

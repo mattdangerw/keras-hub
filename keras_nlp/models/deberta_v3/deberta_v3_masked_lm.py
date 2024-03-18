@@ -25,12 +25,12 @@ from keras_nlp.models.deberta_v3.deberta_v3_masked_lm_preprocessor import (
     DebertaV3MaskedLMPreprocessor,
 )
 from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3MaskedLM")
-class DebertaV3MaskedLM(Task):
+class DebertaV3MaskedLM(MaskedLM):
     """An end-to-end DeBERTaV3 model for the masked language modeling task.
 
     This model will train DeBERTaV3 on a masked language modeling task.

@@ -18,9 +18,19 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_registered_presets
+from keras_nlp.utils.preset_utils import load_from_preset
+from keras_nlp.utils.python_utils import classproperty
+from keras_nlp.utils.python_utils import format_docstring
 
 
-@keras_nlp_export("keras_nlp.tokenizers.Tokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.models.Tokenizer",
+        "keras_nlp.tokenizers.Tokenizer",
+    ]
+)
 class Tokenizer(PreprocessingLayer):
     """A base class for tokenizer layers.
 
@@ -123,3 +133,66 @@ class Tokenizer(PreprocessingLayer):
 
     def call(self, inputs, *args, training=None, **kwargs):
         return self.tokenize(inputs, *args, **kwargs)
+
+    @classproperty
+    def presets(cls):
+        return get_registered_presets(cls)
+
+    @classmethod
+    def from_preset(
+        cls,
+        preset,
+        **kwargs,
+    ):
+        """Instantiate {{model_name}} tokenizer from preset vocabulary.
+
+        Args:
+            preset: string. Must be one of "{{preset_names}}".
+
+        Examples:
+        ```python
+        # Load a preset tokenizer.
+        tokenizer = {{model_name}}.from_preset("{{example_preset_name}}")
+
+        # Tokenize some input.
+        tokenizer("The quick brown fox tripped.")
+
+        # Detokenize some input.
+        tokenizer.detokenize([5, 6, 7, 8, 9])
+        ```
+        """
+        config_file = "tokenizer.json"
+        preset_cls = check_config_class(preset, config_file=config_file)
+        if not issubclass(preset_cls, cls):
+            raise ValueError(
+                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"a subclass or equal to calling class `{cls.__name__}`. Call "
+                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+            )
+        return load_from_preset(
+            preset,
+            config_file=config_file,
+            config_overrides=kwargs,
+        )
+
+    def __init_subclass__(cls, **kwargs):
+        # Use __init_subclass__ to setup a correct docstring for from_preset.
+        super().__init_subclass__(**kwargs)
+
+        # If the subclass does not define from_preset, assign a wrapper so that
+        # each class can have a distinct docstring.
+        if "from_preset" not in cls.__dict__:
+
+            def from_preset(calling_cls, *args, **kwargs):
+                return super(cls, calling_cls).from_preset(*args, **kwargs)
+
+            cls.from_preset = classmethod(from_preset)
+
+        # Format and assign the docstring unless the subclass has overridden it.
+        if cls.from_preset.__doc__ is None:
+            cls.from_preset.__func__.__doc__ = Tokenizer.from_preset.__doc__
+            format_docstring(
+                model_name=cls.__name__,
+                example_preset_name=next(iter(cls.presets), ""),
+                preset_names='", "'.join(cls.presets),
+            )(cls.from_preset.__func__)

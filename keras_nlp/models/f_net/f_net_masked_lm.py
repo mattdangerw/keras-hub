@@ -23,12 +23,12 @@ from keras_nlp.models.f_net.f_net_masked_lm_preprocessor import (
     FNetMaskedLMPreprocessor,
 )
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.FNetMaskedLM")
-class FNetMaskedLM(Task):
+class FNetMaskedLM(MaskedLM):
     """An end-to-end FNet model for the masked language modeling task.
 
     This model will train FNet on a masked language modeling task.

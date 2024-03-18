@@ -23,12 +23,12 @@ from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
 from keras_nlp.models.bert.bert_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BertMaskedLM")
-class BertMaskedLM(Task):
+class BertMaskedLM(MaskedLM):
     """An end-to-end BERT model for the masked language modeling task.
 
     This model will train BERT on a masked language modeling task.

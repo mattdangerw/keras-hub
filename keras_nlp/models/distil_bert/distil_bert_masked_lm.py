@@ -25,12 +25,12 @@ from keras_nlp.models.distil_bert.distil_bert_masked_lm_preprocessor import (
     DistilBertMaskedLMPreprocessor,
 )
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DistilBertMaskedLM")
-class DistilBertMaskedLM(Task):
+class DistilBertMaskedLM(MaskedLM):
     """An end-to-end DistilBERT model for the masked language modeling task.
 
     This model will train DistilBERT on a masked language modeling task.

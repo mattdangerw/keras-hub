@@ -17,18 +17,18 @@ import copy
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.models.roberta.roberta_backbone import RobertaBackbone
 from keras_nlp.models.roberta.roberta_backbone import roberta_kernel_initializer
 from keras_nlp.models.roberta.roberta_masked_lm_preprocessor import (
     RobertaMaskedLMPreprocessor,
 )
 from keras_nlp.models.roberta.roberta_presets import backbone_presets
-from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.RobertaMaskedLM")
-class RobertaMaskedLM(Task):
+class RobertaMaskedLM(MaskedLM):
     """An end-to-end RoBERTa model for the masked language modeling task.
 
     This model will train RoBERTa on a masked language modeling task.

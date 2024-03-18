@@ -23,13 +23,13 @@ from keras_nlp.models.albert.albert_masked_lm_preprocessor import (
     AlbertMaskedLMPreprocessor,
 )
 from keras_nlp.models.albert.albert_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.masked_lm import MaskedLM
 from keras_nlp.utils.keras_utils import gelu_approximate
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.AlbertMaskedLM")
-class AlbertMaskedLM(Task):
+class AlbertMaskedLM(MaskedLM):
     """An end-to-end ALBERT model for the masked language modeling task.
 
     This model will train ALBERT on a masked language modeling task.

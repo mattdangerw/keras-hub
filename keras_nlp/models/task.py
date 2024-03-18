@@ -19,9 +19,12 @@ from rich import table as rich_table
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
+from keras_nlp.models.backbone import Backbone
 from keras_nlp.utils.keras_utils import print_msg
 from keras_nlp.utils.pipeline_model import PipelineModel
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
+from keras_nlp.utils.preset_utils import get_registered_presets
+from keras_nlp.utils.preset_utils import get_registered_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -29,7 +32,20 @@ from keras_nlp.utils.python_utils import format_docstring
 
 @keras_nlp_export("keras_nlp.models.Task")
 class Task(PipelineModel):
-    """Base class for Task models."""
+    """Base class for all Task models.
+
+    A `Task` extends a `Backbone` with a prediction head and full training
+    setup. A `Task` should be usable with `fit()`, `predict()` and `evaluate()`.
+
+    All `Task` models have `backbone` and `preprocessor` properties. By
+    default `fit()`, `predict()` and `evaluate()` will preprocess all inputs
+    automatically. To preprocess inputs manually or with a custom function, you
+    can set `task.preprocessor = None`, which disable any automatic
+    preprocessing on inputs.
+
+    All `Task` classes include a `from_preset()` constructor which can be used
+    to load a pre-trained config and weights.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -183,7 +199,7 @@ class Task(PipelineModel):
 
     @classproperty
     def presets(cls):
-        return {}
+        return get_registered_presets(cls)
 
     @classmethod
     def from_preset(
@@ -211,6 +227,13 @@ class Task(PipelineModel):
         )
         ```
         """
+        if cls == Task:
+            raise ValueError(
+                "Do not call `Task.from_preset()` directly. Instead call a "
+                "choose a particular task class, e.g. "
+                "`keras_nlp.models.Classifier.from_preset()` or "
+                "`keras_nlp.models.BertClassifier.from_preset()`."
+            )
         if "backbone" in kwargs:
             raise ValueError(
                 "You cannot pass a `backbone` argument to the `from_preset` "
@@ -218,15 +241,29 @@ class Task(PipelineModel):
                 "constructor with a `backbone` argument. "
                 f"Received: backbone={kwargs['backbone']}."
             )
-        # We support short IDs for official presets, e.g. `"bert_base_en"`.
-        # Map these to a Kaggle Models handle.
-        if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
-
-        preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
+        preset_cls = check_config_class(preset)
 
         # Backbone case.
-        if preset_cls == cls.backbone_cls:
+        if issubclass(preset_cls, Backbone):
+            subclasses = get_registered_subclasses(cls)
+            subclasses = tuple(
+                filter(lambda x: x.backbone_cls == preset_cls, subclasses)
+            )
+            if len(subclasses) == 0:
+                raise ValueError(
+                    f"No registered subclass of `{cls.__name__}` can load "
+                    f"a `Backbone` of class `{preset_cls.__name__}`. Try "
+                    f"`print({cls.__name__}.presets)` to see a list of allowed "
+                    "preset names."
+                )
+            if len(subclasses) > 1:
+                classnames = ", ".join(f"`{x.__name__}`" for x in subclasses)
+                raise ValueError(
+                    f"Ambiguous call to `{cls.__name__}.from_preset()`. Found "
+                    f"multiple registered subclasses {classnames}. Please call "
+                    "`from_preset` on a subclass directly."
+                )
+            cls = subclasses[0]
             # Forward dtype to the backbone.
             config_overrides = {}
             if "dtype" in kwargs:
@@ -246,6 +283,12 @@ class Task(PipelineModel):
                 preprocessor = cls.preprocessor_cls(tokenizer=tokenizer)
             return cls(backbone=backbone, preprocessor=preprocessor, **kwargs)
 
+        if not issubclass(preset_cls, cls):
+            raise ValueError(
+                f"Preset has type `{preset_cls.__name__}` which is not a "
+                f"a subclass or equal to calling class `{cls.__name__}`. Call "
+                f"`from_preset` directly on `{preset_cls.__name__}` instead."
+            )
         # Task case.
         return load_from_preset(
             preset,

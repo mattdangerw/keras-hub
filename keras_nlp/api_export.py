@@ -22,9 +22,14 @@ except ImportError:
     namex = None
 
 
-def maybe_register_serializable(symbol):
+def maybe_register(symbol):
     if isinstance(symbol, types.FunctionType) or hasattr(symbol, "get_config"):
         keras.saving.register_keras_serializable(package="keras_nlp")(symbol)
+    if hasattr(symbol, "from_preset"):
+        # Avoid circular import.
+        from keras_nlp.utils.preset_utils import register_preset_class
+
+        register_preset_class()(symbol)
 
 
 if namex:
@@ -34,7 +39,7 @@ if namex:
             super().__init__(package="keras_nlp", path=path)
 
         def __call__(self, symbol):
-            maybe_register_serializable(symbol)
+            maybe_register(symbol)
             return super().__call__(symbol)
 
 else:
@@ -44,5 +49,5 @@ else:
             pass
 
         def __call__(self, symbol):
-            maybe_register_serializable(symbol)
+            maybe_register(symbol)
             return symbol

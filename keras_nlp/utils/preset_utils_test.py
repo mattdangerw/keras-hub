@@ -24,7 +24,7 @@ from keras_nlp.models.bert.bert_classifier import BertClassifier
 from keras_nlp.models.roberta.roberta_classifier import RobertaClassifier
 from keras_nlp.models.task import Task
 from keras_nlp.tests.test_case import TestCase
-from keras_nlp.utils.preset_utils import check_preset_class
+from keras_nlp.utils.preset_utils import check_config_class
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.preset_utils import save_to_preset
 
@@ -76,11 +76,11 @@ class PresetUtilsTest(TestCase):
         self.assertEqual(config["weights"], "model.weights.h5")
 
         # Try loading the model from preset directory
-        self.assertEqual(cls, check_preset_class(save_dir, cls))
-        self.assertEqual(cls, check_preset_class(save_dir, Task))
+        self.assertEqual(cls, check_config_class(save_dir, cls))
+        self.assertEqual(cls, check_config_class(save_dir, Task))
         with self.assertRaises(ValueError):
             # Preset is a subclass of Task, not Backbone.
-            check_preset_class(save_dir, Backbone)
+            check_config_class(save_dir, Backbone)
 
         # Try loading the model from preset directory
         restored_model = load_from_preset(save_dir)

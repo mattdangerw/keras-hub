@@ -16,6 +16,7 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.distil_bert.distil_bert_backbone import DistilBertBackbone
 from keras_nlp.models.distil_bert.distil_bert_backbone import (
     distilbert_kernel_initializer,
@@ -24,12 +25,11 @@ from keras_nlp.models.distil_bert.distil_bert_preprocessor import (
     DistilBertPreprocessor,
 )
 from keras_nlp.models.distil_bert.distil_bert_presets import backbone_presets
-from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DistilBertClassifier")
-class DistilBertClassifier(Task):
+class DistilBertClassifier(Classifier):
     """An end-to-end DistilBERT model for classification tasks.
 
     This model attaches a classification head to a

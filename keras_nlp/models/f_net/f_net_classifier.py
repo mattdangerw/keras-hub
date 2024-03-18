@@ -16,16 +16,16 @@ import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
 from keras_nlp.models.f_net.f_net_presets import backbone_presets
-from keras_nlp.models.task import Task
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.FNetClassifier")
-class FNetClassifier(Task):
+class FNetClassifier(Classifier):
     """An end-to-end f_net model for classification tasks.
 
     This model attaches a classification head to a

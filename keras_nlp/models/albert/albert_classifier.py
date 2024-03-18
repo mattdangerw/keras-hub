@@ -20,12 +20,12 @@ from keras_nlp.models.albert.albert_backbone import AlbertBackbone
 from keras_nlp.models.albert.albert_backbone import albert_kernel_initializer
 from keras_nlp.models.albert.albert_preprocessor import AlbertPreprocessor
 from keras_nlp.models.albert.albert_presets import backbone_presets
-from keras_nlp.models.task import Task
+from keras_nlp.models.classifier import Classifier
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.AlbertClassifier")
-class AlbertClassifier(Task):
+class AlbertClassifier(Classifier):
     """An end-to-end ALBERT model for classification tasks
 
     This model attaches a classification head to a `keras_nlp.model.AlbertBackbone`

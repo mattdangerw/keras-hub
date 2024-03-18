@@ -22,12 +22,12 @@ from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
-from keras_nlp.models.generative_task import GenerativeTask
+from keras_nlp.models.seq_2_seq_lm import Seq2SeqLM
 from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
-class BartSeq2SeqLM(GenerativeTask):
+class BartSeq2SeqLM(Seq2SeqLM):
     """An end-to-end BART model for seq2seq language modeling.
 
     A seq2seq language model (LM) is an encoder-decoder model which is used for
