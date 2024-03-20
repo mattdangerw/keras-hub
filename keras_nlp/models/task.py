@@ -221,7 +221,7 @@ class Task(PipelineModel):
         # We support short IDs for official presets, e.g. `"bert_base_en"`.
         # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
+            preset = cls.presets[preset]
 
         preset_cls = check_preset_class(preset, (cls, cls.backbone_cls))
 

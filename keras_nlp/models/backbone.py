@@ -132,7 +132,7 @@ class Backbone(keras.Model):
         # We support short IDs for official presets, e.g. `"bert_base_en"`.
         # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
+            preset = cls.presets[preset]
 
         check_preset_class(preset, cls)
         return load_from_preset(

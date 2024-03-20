@@ -15,52 +15,8 @@
 
 # Metadata for loading pretrained model weights.
 backbone_presets = {
-    "gemma_2b_en": {
-        "metadata": {
-            "description": (
-                "18-layer Gemma model (Gemma with 2B parameters). "
-            ),
-            "params": 2506172416,
-            "official_name": "Gemma",
-            "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
-        },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_2b_en/2",
-    },
-    "gemma_instruct_2b_en": {
-        "metadata": {
-            "description": (
-                "18-layer Gemma model (Gemma with 2B parameters). "
-            ),
-            "params": 2506172416,
-            "official_name": "Gemma",
-            "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
-        },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/2",
-    },
-    "gemma_7b_en": {
-        "metadata": {
-            "description": (
-                "28-layer Gemma model (Gemma with 7B parameters). "
-            ),
-            "params": 8537680896,
-            "official_name": "Gemma",
-            "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
-        },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_7b_en/2",
-    },
-    "gemma_instruct_7b_en": {
-        "metadata": {
-            "description": (
-                "28-layer Gemma model (Gemma with 7B parameters). "
-            ),
-            "params": 8537680896,
-            "official_name": "Gemma",
-            "path": "gemma",
-            "model_card": "https://www.kaggle.com/models/google/gemma",
-        },
-        "kaggle_handle": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/2",
-    },
+    "gemma_2b_en": "kaggle://keras/gemma/keras/gemma_2b_en/2",
+    "gemma_instruct_2b_en": "kaggle://keras/gemma/keras/gemma_instruct_2b_en/2",
+    "gemma_7b_en": "kaggle://keras/gemma/keras/gemma_7b_en/2",
+    "gemma_instruct_7b_en": "kaggle://keras/gemma/keras/gemma_instruct_7b_en/2",
 }

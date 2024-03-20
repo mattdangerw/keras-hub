@@ -668,7 +668,7 @@ class BytePairTokenizer(tokenizer.Tokenizer):
         # We support short IDs for official presets, e.g. `"bert_base_en"`.
         # Map these to a Kaggle Models handle.
         if preset in cls.presets:
-            preset = cls.presets[preset]["kaggle_handle"]
+            preset = cls.presets[preset]
 
         config_file = "tokenizer.json"
         check_preset_class(preset, cls, config_file=config_file)
