@@ -34,17 +34,20 @@ from keras_nlp.utils.python_utils import format_docstring
 class Task(PipelineModel):
     """Base class for all Task models.
 
-    A `Task` extends a `Backbone` with a prediction head and full training
-    setup. A `Task` should be usable with `fit()`, `predict()` and `evaluate()`.
+    A `Task` wraps a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be directly
+    used for training, fine-tuning, and prediction for a given text problem.  
 
     All `Task` models have `backbone` and `preprocessor` properties. By
     default `fit()`, `predict()` and `evaluate()` will preprocess all inputs
-    automatically. To preprocess inputs manually or with a custom function, you
-    can set `task.preprocessor = None`, which disable any automatic
+    automatically. To preprocess inputs separately or with a custom function,
+    you can set `task.preprocessor = None`, which disable any automatic
     preprocessing on inputs.
 
     All `Task` classes include a `from_preset()` constructor which can be used
-    to load a pre-trained config and weights.
+    to load a pre-trained config and weights. Calling `from_preset()` on a task
+    will automatically instantiate a `keras_nlp.models.Backbone` and
+    `keras_nlp.models.Preprocessor`.
     """
 
     def __init__(self, *args, **kwargs):
@@ -230,7 +233,7 @@ class Task(PipelineModel):
         if cls == Task:
             raise ValueError(
                 "Do not call `Task.from_preset()` directly. Instead call a "
-                "choose a particular task class, e.g. "
+                "particular task class, e.g. "
                 "`keras_nlp.models.Classifier.from_preset()` or "
                 "`keras_nlp.models.BertClassifier.from_preset()`."
             )

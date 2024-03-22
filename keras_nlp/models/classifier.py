@@ -19,8 +19,8 @@ from keras_nlp.models.task import Task
 class Classifier(Task):
     """Base class for all classification tasks.
 
-    All `Classifier` tasks wrap a `keras_nlp.models.Backbone` and
-    `keras_nlp.models.Preprocessor` to create a model that can be used for
+    `Classifier` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
     sequence classification. `Classifier` tasks take an additional
     `num_classes` argument, controlling the number of predicted output classes.
 
@@ -31,7 +31,7 @@ class Classifier(Task):
     used to load a pre-trained config and weights.
 
     Example:
-    ```
+    ```python
     # Load a BERT classifier with pre-trained weights.
     classifier = keras_nlp.models.Classifier.from_preset(
         "bert_base_en",

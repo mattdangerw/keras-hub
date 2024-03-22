@@ -30,18 +30,18 @@ from keras_nlp.utils.tensor_utils import tensor_to_list
 class CausalLM(Task):
     """Base class for generative language modeling tasks.
 
-    All `CausalLM` tasks wrap a `backbone`, `preprocessor` to create a model
-    that can be used for generation and generative fine-tuning.
+    `CausalLM` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    generation and generative fine-tuning.
 
-    To assist with generative tasks, all `CausalLM` tasks provide an additional,
-    high-level `generate()` function which can be used to auto-regressively
-    sample a model token by token with a string in, string out signature.
-    The `compile()` method of all `CausalLM` classes contains an additional
-    `sampler` argument, which can be used to pass a custom
-    `keras_nlp.samplers.Sampler` to control how the predicted distribution will
-    be sampled.
+    `CausalLM` tasks provide an additional, high-level `generate()` function
+    which can be used to auto-regressively sample a model token by token with a
+    string in, string out signature. The `compile()` method of all `CausalLM`
+    classes contains an additional `sampler` argument, which can be used to pass
+    a `keras_nlp.samplers.Sampler` to control how the predicted distribution
+    will be sampled.
 
-    When calling `fit()`, the tokenized input will be predicted token by token
+    When calling `fit()`, the tokenized input will be predicted token-by-token
     with a causal mask applied, which gives both a pre-training and supervised
     fine-tuning setup for controlling inference-time generation.
 
@@ -49,7 +49,7 @@ class CausalLM(Task):
     to load a pre-trained config and weights.
 
     Example:
-    ```
+    ```python
     # Load a GPT2 backbone with pre-trained weights.
     causal_lm = keras_nlp.models.CausalLM.from_preset(
         "gpt2_base_en",

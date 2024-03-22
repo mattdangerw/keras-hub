@@ -19,9 +19,9 @@ from keras_nlp.models.task import Task
 class MaskedLM(Task):
     """Base class for masked language modeling tasks.
 
-    All `MaskedLM` tasks wrap a `backbone`, `preprocessor` to create a model
-    that can be used for unsupervised fine-tuning with a masked language
-    modeling loss.
+    `MaskedLM` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    unsupervised fine-tuning with a masked language modeling loss.
 
     When calling `fit()`, all input will be tokenized, and random tokens in
     the input sequence will be masked. These positions of these masked tokens
@@ -32,7 +32,7 @@ class MaskedLM(Task):
     to load a pre-trained config and weights.
 
     Example:
-    ```
+    ```python
     # Load a Bert MaskedLM with pre-trained weights.
     masked_lm = keras_nlp.models.MaskedLM.from_preset(
         "bert_base_en",

@@ -29,22 +29,23 @@ class Backbone(keras.Model):
     A `Backbone` is the basic architecture for a given NLP model. Unlike a
     `keras_nlp.models.Task`, a `Backbone` is not tailored to any specific loss
     function and training setup. A `Backbone` generally outputs the last hidden
-    states of a architecture before any output predictions.
+    states of an architecture before any output predictions.
 
     A `Backbone` can be used in one of two ways:
+
     1. Through a `Task` class, which will wrap and extend a `Backbone` so it
        can be used with high level Keras functions like `fit()`, `predict()` or
        `evaluate()`. `Task` classes are built with a particular training
        objective in mind (e.g. classification or language modeling).
-    2. Directly, by extending the model with additional outputs and training
-       setup. This is the most flexible approach, and can allow for any outputs,
-       loss, or custom training loop.
+    2. Directly, by extending underlying functional model with additional
+       outputs and training setup. This is the most flexible approach, and can
+       allow for any outputs, loss, or custom training loop.
 
     All backbones include a `from_preset()` constructor which can be used to
     load a pre-trained config and weights.
 
     Example:
-    ```
+    ```python
     # Load a BERT backbone with pre-trained weights.
     backbone = keras_nlp.models.Backbone.from_preset(
         "bert_base_en",

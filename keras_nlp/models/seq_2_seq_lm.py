@@ -19,17 +19,16 @@ from keras_nlp.models.causal_lm import CausalLM
 class Seq2SeqLM(CausalLM):
     """Base class for sequence to sequence language modeling tasks.
 
-    All `Seq2SeqLM` wrap a `backbone`, `preprocessor` to create a task that
-    can be used for generation and generative fine-tuning, when generation is
-    conditioned on a fixed sequence input in a sequence to sequence setting.
+    `Seq2SeqLM` tasks wrap a `keras_nlp.models.Backbone` and
+    a `keras_nlp.models.Preprocessor` to create a model that can be used for
+    generation and generative fine-tuning, when generation is conditioned on
+    additional input sequence in a sequence-to-sequence setting.
 
-    To assist with generative tasks, all `Seq2SeqLM` tasks provide an
-    additional, high-level `generate()` function which can be used to
-    auto-regressively sample a output sequence token by token. The
-    `compile()` method of all `Seq2SeqLM` classes contains an additional
-    `sampler` argument, which can be used to pass a custom
-    `keras_nlp.samplers.Sampler` to control how the predicted distribution will
-    be sampled.
+    `Seq2SeqLM` tasks provide an additional, high-level `generate()` function
+    which can be used to auto-regressively sample an output sequence token by
+    token. The `compile()` method of `Seq2SeqLM` classes contains an additional
+    `sampler` argument, which can be used to pass a `keras_nlp.samplers.Sampler`
+    to control how the predicted distribution will be sampled.
 
     When calling `fit()`, each input should contain an input and output
     sequence. The model will be trained to predict the output sequence
@@ -41,7 +40,7 @@ class Seq2SeqLM(CausalLM):
     used to load a pre-trained config and weights.
 
     Example:
-    ```
+    ```python
     # Load a Bart backbone with pre-trained weights.
     seq_2_seq_lm = keras_nlp.models.Seq2SeqLM.from_preset(
         "bart_base_en",
