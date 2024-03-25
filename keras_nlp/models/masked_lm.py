@@ -42,4 +42,3 @@ class MaskedLM(Task):
     """
 
     # TODO: enforce mask_positions input?
-    pass

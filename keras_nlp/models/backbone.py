@@ -16,7 +16,7 @@ from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config
 from keras_nlp.backend import keras
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import get_registered_presets
+from keras_nlp.utils.preset_utils import list_presets
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -135,7 +135,9 @@ class Backbone(keras.Model):
 
     @classproperty
     def presets(cls):
-        return get_registered_presets(cls)
+        """List builtin presets for a `Task` subclass."""
+        # We can also load backbone presets.
+        return list_presets(cls)
 
     @classmethod
     def from_preset(
@@ -169,7 +171,7 @@ class Backbone(keras.Model):
         if not issubclass(preset_cls, cls):
             raise ValueError(
                 f"Preset has type `{preset_cls.__name__}` which is not a "
-                f"a subclass or equal to calling class `{cls.__name__}`. Call "
+                f"a subclass of calling class `{cls.__name__}`. Call "
                 f"`from_preset` directly on `{preset_cls.__name__}` instead."
             )
         return load_from_preset(

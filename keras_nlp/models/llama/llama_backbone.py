@@ -24,7 +24,7 @@ from keras_nlp.models.backbone import Backbone
 from keras_nlp.models.llama.llama_decoder import LlamaTransformerDecoder
 from keras_nlp.models.llama.llama_layernorm import LlamaLayerNorm
 
-# from keras_nlp.utils.python_utils import classproperty
+#
 
 
 def _llama_kernel_initializer(stddev=0.02):

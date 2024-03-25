@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
-
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.layers.modeling.masked_lm_head import MaskedLMHead
@@ -22,9 +20,7 @@ from keras_nlp.models.bert.bert_backbone import bert_kernel_initializer
 from keras_nlp.models.bert.bert_masked_lm_preprocessor import (
     BertMaskedLMPreprocessor,
 )
-from keras_nlp.models.bert.bert_presets import backbone_presets
 from keras_nlp.models.masked_lm import MaskedLM
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BertMaskedLM")
@@ -95,6 +91,9 @@ class BertMaskedLM(MaskedLM):
     ```
     """
 
+    backbone_cls = BertBackbone
+    preprocessor_cls = BertMaskedLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -139,15 +138,3 @@ class BertMaskedLM(MaskedLM):
             weighted_metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def backbone_cls(cls):
-        return BertBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return BertMaskedLMPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

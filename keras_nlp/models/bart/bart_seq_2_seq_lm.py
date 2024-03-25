@@ -12,18 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
 from keras_nlp.backend import ops
 from keras_nlp.models.bart.bart_backbone import BartBackbone
-from keras_nlp.models.bart.bart_presets import backbone_presets
 from keras_nlp.models.bart.bart_seq_2_seq_lm_preprocessor import (
     BartSeq2SeqLMPreprocessor,
 )
 from keras_nlp.models.seq_2_seq_lm import Seq2SeqLM
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.BartSeq2SeqLM")
@@ -179,6 +176,9 @@ class BartSeq2SeqLM(Seq2SeqLM):
     ```
     """
 
+    backbone_cls = BartBackbone
+    preprocessor_cls = BartSeq2SeqLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -206,18 +206,6 @@ class BartSeq2SeqLM(Seq2SeqLM):
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classproperty
-    def backbone_cls(cls):
-        return BartBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return BartSeq2SeqLMPreprocessor
 
     def call_decoder_with_cache(
         self,

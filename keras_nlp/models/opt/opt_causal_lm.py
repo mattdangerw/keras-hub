@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -22,8 +21,6 @@ from keras_nlp.models.opt.opt_backbone import OPTBackbone
 from keras_nlp.models.opt.opt_causal_lm_preprocessor import (
     OPTCausalLMPreprocessor,
 )
-from keras_nlp.models.opt.opt_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.OPTCausalLM")
@@ -149,6 +146,9 @@ class OPTCausalLM(CausalLM):
     ```
     """
 
+    backbone_cls = OPTBackbone
+    preprocessor_cls = OPTCausalLMPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -176,18 +176,6 @@ class OPTCausalLM(CausalLM):
             metrics=[keras.metrics.SparseCategoricalAccuracy()],
             jit_compile=True,
         )
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)
-
-    @classproperty
-    def backbone_cls(cls):
-        return OPTBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return OPTCausalLMPreprocessor
 
     def call_with_cache(
         self,

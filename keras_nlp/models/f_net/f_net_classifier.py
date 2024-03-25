@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -20,8 +19,6 @@ from keras_nlp.models.classifier import Classifier
 from keras_nlp.models.f_net.f_net_backbone import FNetBackbone
 from keras_nlp.models.f_net.f_net_backbone import f_net_kernel_initializer
 from keras_nlp.models.f_net.f_net_preprocessor import FNetPreprocessor
-from keras_nlp.models.f_net.f_net_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.FNetClassifier")
@@ -100,6 +97,9 @@ class FNetClassifier(Classifier):
     ```
     """
 
+    backbone_cls = FNetBackbone
+    preprocessor_cls = FNetPreprocessor
+
     def __init__(
         self,
         backbone,
@@ -162,15 +162,3 @@ class FNetClassifier(Classifier):
             }
         )
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return FNetBackbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return FNetPreprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

@@ -51,4 +51,3 @@ class Classifier(Task):
     """
 
     # TODO: enforce num_classes?
-    pass

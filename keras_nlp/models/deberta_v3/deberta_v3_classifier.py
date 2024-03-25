@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 
 from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import keras
@@ -24,8 +23,6 @@ from keras_nlp.models.deberta_v3.deberta_v3_backbone import (
 from keras_nlp.models.deberta_v3.deberta_v3_preprocessor import (
     DebertaV3Preprocessor,
 )
-from keras_nlp.models.deberta_v3.deberta_v3_presets import backbone_presets
-from keras_nlp.utils.python_utils import classproperty
 
 
 @keras_nlp_export("keras_nlp.models.DebertaV3Classifier")
@@ -153,6 +150,9 @@ class DebertaV3Classifier(Classifier):
     ```
     """
 
+    backbone_cls = DebertaV3Backbone
+    preprocessor_cls = DebertaV3Preprocessor
+
     def __init__(
         self,
         backbone,
@@ -234,15 +234,3 @@ class DebertaV3Classifier(Classifier):
             }
         )
         return config
-
-    @classproperty
-    def backbone_cls(cls):
-        return DebertaV3Backbone
-
-    @classproperty
-    def preprocessor_cls(cls):
-        return DebertaV3Preprocessor
-
-    @classproperty
-    def presets(cls):
-        return copy.deepcopy(backbone_presets)

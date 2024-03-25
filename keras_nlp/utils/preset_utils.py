@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import collections
 import datetime
+import inspect
 import json
 import os
 
-from keras_nlp.api_export import keras_nlp_export
 from keras_nlp.backend import config as backend_config
 from keras_nlp.backend import keras
 
@@ -29,30 +30,33 @@ KAGGLE_PREFIX = "kaggle://"
 GS_PREFIX = "gs://"
 TOKENIZER_ASSET_DIR = "assets/tokenizer"
 # Global state for preset registry.
-_PRESET_CLASSES = set()
 _BUILTIN_PRESETS = {}
+_BUILTIN_PRESETS_FOR_CLASS = collections.defaultdict(dict)
 
 
-@keras_nlp_export("keras_nlp.utils.register_preset_class")
-def register_preset_class():
-    def decorator(cls):
-        _PRESET_CLASSES.add(cls)
-        for preset in cls.presets:
-            _BUILTIN_PRESETS[preset] = cls.presets[preset]
-
-    return decorator
+def register_presets(presets, classes):
+    for preset in presets:
+        _BUILTIN_PRESETS[preset] = presets[preset]
+        for cls in classes:
+            _BUILTIN_PRESETS_FOR_CLASS[cls][preset] = presets[preset]
 
 
-def get_registered_presets(cls):
+def list_presets(cls):
+    """Find all registered builtin presets for a class."""
     presets = {}
-    for x in get_registered_subclasses(cls):
-        if x is not cls and issubclass(x, cls):
-            presets.update(x.presets)
+    for subclass in list_subclasses(cls):
+        presets.update(_BUILTIN_PRESETS_FOR_CLASS[subclass])
     return presets
 
 
-def get_registered_subclasses(cls):
-    return list(filter(lambda x: issubclass(x, cls), _PRESET_CLASSES))
+def list_subclasses(cls):
+    """Find all registered subclasses of a class."""
+    custom_objects = keras.saving.get_custom_objects().values()
+    subclasses = []
+    for x in custom_objects:
+        if inspect.isclass(x) and issubclass(x, cls):
+            subclasses.append(x)
+    return subclasses
 
 
 def get_file(preset, path):

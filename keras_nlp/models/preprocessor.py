@@ -17,9 +17,10 @@ from keras_nlp.backend import keras
 from keras_nlp.layers.preprocessing.preprocessing_layer import (
     PreprocessingLayer,
 )
+from keras_nlp.tokenizers import Tokenizer
 from keras_nlp.utils.preset_utils import check_config_class
-from keras_nlp.utils.preset_utils import get_registered_presets
-from keras_nlp.utils.preset_utils import get_registered_subclasses
+from keras_nlp.utils.preset_utils import list_presets
+from keras_nlp.utils.preset_utils import list_subclasses
 from keras_nlp.utils.preset_utils import load_from_preset
 from keras_nlp.utils.python_utils import classproperty
 from keras_nlp.utils.python_utils import format_docstring
@@ -37,6 +38,8 @@ class Preprocessor(PreprocessingLayer):
 
     This class can be subclassed to implement
     """
+
+    tokenizer_cls = Tokenizer
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -69,12 +72,9 @@ class Preprocessor(PreprocessingLayer):
         return cls(**config)
 
     @classproperty
-    def tokenizer_cls(cls):
-        return None
-
-    @classproperty
     def presets(cls):
-        return get_registered_presets(cls)
+        # We can also load tokenizer presets.
+        return {**cls.tokenizer_cls.presets, **list_presets(cls)}
 
     @classmethod
     def from_preset(
@@ -103,22 +103,21 @@ class Preprocessor(PreprocessingLayer):
             )
         config_file = "tokenizer.json"
         preset_cls = check_config_class(preset, config_file=config_file)
-        subclasses = get_registered_subclasses(cls)
+        subclasses = list_subclasses(cls)
         subclasses = tuple(
-            filter(lambda x: x.backbone_cls == preset_cls, subclasses)
+            filter(lambda x: x.tokenizer_cls == preset_cls, subclasses)
         )
         if len(subclasses) == 0:
             raise ValueError(
                 f"No registered subclass of `{cls.__name__}` can load "
-                f"a `Tokenizer` of class `{preset_cls.__name__}`. Try "
-                f"`print({cls.__name__}.presets)` to see a list of allowed "
-                "preset names."
+                f"a `{preset_cls.__name__}`."
             )
-        if len(subclasses) > 2:
+        if len(subclasses) > 1:
+            names = ", ".join(f"`{x.__name__}`" for x in subclasses)
             raise ValueError(
-                f"Ambiguous call to `{cls.__name__}.from_preset()`. Found "
-                f"multiple registered subclasses {subclasses}. Please call "
-                "`from_preset` on a subclass directly."
+                f"Ambiguous call to `{cls.__name__}.from_preset()`. "
+                f"Found multiple possible subclasses {names}. "
+                "Please call `from_preset` on a subclass directly."
             )
         cls = subclasses[0]
         tokenizer = load_from_preset(
