@@ -100,8 +100,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         # cache at the specified index. `cache = None` handles the training
         # case, where we don't use the cache at all.
         if cache is not None:
-            key_cache = cache[:, 0, ...]
-            value_cache = cache[:, 1, ...]
+            key_cache, value_cache = cache
             if cache_update_index is None:
                 key = key_cache
                 value = value_cache
@@ -111,7 +110,7 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
                 start = [0, cache_update_index, 0, 0]
                 key = ops.slice_update(key_cache, start, key_update)
                 value = ops.slice_update(value_cache, start, value_update)
-                cache = ops.stack((key, value), axis=1)
+                cache = (key, value)
         else:
             if cache_update_index is not None:
                 raise ValueError(

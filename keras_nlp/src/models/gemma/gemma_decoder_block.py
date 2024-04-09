@@ -157,7 +157,7 @@ class GemmaDecoderBlock(keras.layers.Layer):
         batch_size = ops.shape(x)[0]
         input_length = output_length = ops.shape(x)[1]
         if cache is not None:
-            input_length = ops.shape(cache)[2]
+            input_length = ops.shape(cache[0])[1]
 
         causal_mask = compute_causal_mask(
             batch_size=batch_size,
