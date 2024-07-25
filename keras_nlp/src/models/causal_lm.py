@@ -183,27 +183,24 @@ class CausalLM(Task):
     def generate_step(
         self,
         inputs,
-        end_token_id=None,
+        stop_token_ids=None,
     ):
         """Run an entire generation loop on a single input batch."""
-        data, index = self.prefill(inputs)
+        data = self.generate_start(inputs)
 
         def cond(data, index):
             return self.is_decoding(
                 data=data,
                 index=index,
-                end_token_id=end_token_id,
+                stop_token_ids=stop_token_ids,
             )
 
         def body(data, index):
             return self.decode(data, index)
 
-        data, _ = ops.while_loop(
-            cond,
-            body,
-            (data, index),
-        )
-        return self.finish_decoding(data)
+        vars = (data, ops.array(0))
+        data, index = ops.while_loop(cond, body, vars)
+        return self.generate_finish(data)
 
     def stateless_generate_step(
         self,
@@ -213,7 +210,7 @@ class CausalLM(Task):
     ):
         """Stateless version of `generate_step()` for use with Jax."""
         with self.generate_stateless_scope(state) as scope:
-            data, index = self.prefill(inputs)
+            data = self.generate_start(inputs)
         state = self.update_generate_state(state, scope)
 
         def cond(state, data, index):
@@ -229,46 +226,11 @@ class CausalLM(Task):
             state = self.update_generate_state(state, scope)
             return state, data, index
 
-        state, data, index = ops.while_loop(
-            cond,
-            body,
-            (state, data, index),
-        )
+        vars = (state, data, ops.array(0))
+        state, data, index = ops.while_loop(cond, body, vars)
         # Only return sampler variables from generation. Weights do not change,
         # and returning them across the compilation boundary is slow.
-        sampler_variables = state[0]
-        return sampler_variables, self.finish_decoding(data)
-
-    def prefill(self, data):
-        """Run inference on the entire input sequence to seed generate data."""
-        # Create an empty cache.
-        batch_size, max_length = ops.shape(data["token_ids"])
-        cache = self.build_cache(batch_size, max_length)
-        # Run a forward pass with the full padded token id sequence.
-        logits, hidden_states, cache = self.call_with_cache(
-            token_ids=data["token_ids"],
-            cache=cache,
-            index=0,
-        )
-        # Update our data dict.
-        data = {
-            **data,
-            "cache": cache,
-            "hidden_states": hidden_states,
-        }
-        # Add sampling beams, other sampling state.
-        data = self.sampler.start(data)
-        # Compute the lengths of all user inputted tokens ids.
-        row_lengths = ops.sum(data["padding_mask"], axis=-1)
-        # Start at the last index that has all user inputted ids.
-        index = ops.min(row_lengths) - 1
-        # Generate one token from the logits we just computed.
-        data = self.sampler.next(
-            data=data,
-            index=index,
-            logits=logits[:, index, :],
-        )
-        return data, index + 1
+        return state[0], self.generate_finish(data)
 
     def is_decoding(self, data, index, stop_token_ids=None):
         """Returns true if decoding should continue."""
@@ -302,9 +264,23 @@ class CausalLM(Task):
         )
         return data, index + 1
 
-    def finish_decoding(self, data):
+    def generate_start(self, data):
+        """Run inference on the entire input sequence to seed generate data."""
+        # Add model specific generation inputs.
+        data = self.get_generate_inputs(data)
+        # Add sampling beams, other sampling state.
+        return self.sampler.start(data)
+
+    def generate_finish(self, data):
         # Remove sampling beams, other sampling state.
         data = self.sampler.finish(data)
+        # Remove model generation outputs.
+        return self.get_generate_outputs(data)
+
+    def get_generate_inputs(self, data):
+        raise NotImplementedError
+
+    def get_generate_outputs(self, data):
         return {
             "token_ids": data["token_ids"],
             "padding_mask": data["padding_mask"],
@@ -350,14 +326,14 @@ class CausalLM(Task):
         if keras.config.backend() == "torch":
             import torch
 
-            def wrapped_generate_function(
+            def wrapped_generate_step(
                 data,
                 stop_token_ids=None,
             ):
                 with torch.no_grad():
                     return self.generate_step(data, stop_token_ids)
 
-            self.generate_function = wrapped_generate_function
+            self.generate_function = wrapped_generate_step
         elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
             self.generate_function = tf.function(
                 self.generate_step, jit_compile=self.jit_compile
