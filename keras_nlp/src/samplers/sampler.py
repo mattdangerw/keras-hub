@@ -77,17 +77,20 @@ class Sampler:
             variables.append(sg.state)
         return variables
 
-    def start(self, data):
-        return data
+    def start(self, inputs):
+        return inputs
 
-    def has_next(
+    def finish(self, inputs):
+        return inputs
+
+    def alive(
         self,
-        data,
+        inputs,
         index,
         stop_token_ids=None,
     ):
         # Check if we have reached `max_length`.
-        token_ids, padding_mask = data["token_ids"], data["padding_mask"]
+        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         _, max_length = ops.shape(token_ids)
         length_remaining = ops.less(index, max_length - 1)
         if stop_token_ids is None:
@@ -99,14 +102,14 @@ class Sampler:
         any_alive = ops.any(sequence_alive)
         return ops.logical_and(length_remaining, any_alive)
 
-    def next(
+    def sample(
         self,
-        data,
+        inputs,
         index,
         logits,
     ):
         next_index = index + 1
-        token_ids, padding_mask = data["token_ids"], data["padding_mask"]
+        token_ids, padding_mask = inputs["token_ids"], inputs["padding_mask"]
         # Compute the next token.
         probabilities = self.compute_probabilities(logits)
         next_token = self.get_next_token(probabilities)
@@ -118,16 +121,13 @@ class Sampler:
         token_column = token_ids[:, next_index][:, None]
         next_token = ops.cast(next_token, token_ids.dtype)[:, None]
         next_token = ops.where(padding_column, token_column, next_token)
-        # Update both in our data dictionary.
+        # Update both in our inputs dictionary.
         start = [0, next_index]
         return {
-            **data,
+            **inputs,
             "token_ids": ops.slice_update(token_ids, start, next_token),
             "padding_mask": ops.slice_update(padding_mask, start, next_padding),
         }
-
-    def finish(self, data):
-        return data
 
     def compute_probabilities(self, logits):
         """Compute token probabilities from logits.
@@ -135,6 +135,11 @@ class Sampler:
         This will always be done in full precision, regardless of dtype, and
         scale by `temperature`.
         """
+        # Models logits will have shape `(batch, sequence, vocab)`.
+        # If we encounter this, squeeze off the sequence dimension, which
+        # should be 1.
+        if len(ops.shape(logits)) == 3:
+            logits = ops.squeeze(logits, 1)
         logits = ops.cast(logits, "float32")
         return keras.activations.softmax(logits / self.temperature)
 

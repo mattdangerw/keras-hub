@@ -20,7 +20,6 @@ from keras_nlp.src.models.falcon.falcon_backbone import FalconBackbone
 from keras_nlp.src.models.falcon.falcon_causal_lm_preprocessor import (
     FalconCausalLMPreprocessor,
 )
-from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.FalconCausalLM")

@@ -21,7 +21,6 @@ from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
 from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm_preprocessor import (
     PaliGemmaCausalLMPreprocessor,
 )
-from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.PaliGemmaCausalLM")

@@ -185,21 +185,20 @@ class GemmaCausalLM(CausalLM):
             **kwargs,
         )
 
-    def get_generate_inputs(self, data):
-        batch_size, length = ops.shape(data["token_ids"])
-        hidden_dim = self.backbone.hidden_dim
+    def get_generate_inputs(self, inputs):
+        batch_size, length = ops.shape(inputs["token_ids"])
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
         cache_shape = [batch_size, num_layers, 2, length, num_heads, head_dim]
-        hidden_shape = [batch_size, length, hidden_dim]
         return {
-            **data,
+            **inputs,
             "cache": ops.zeros(cache_shape, dtype=self.compute_dtype),
-            "hidden_states": ops.zeros(hidden_shape, dtype=self.compute_dtype),
         }
 
-    def call_with_cache(self, token_ids, cache, index):
+    def generate_call(self, inputs, index, length=1):
+        token_ids = inputs["token_ids"][:, index][:, None]
+        cache = inputs["cache"]
         x = self.backbone.token_embedding(token_ids)
         x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
         # Each decoder layer has a cache; we update them separately.
@@ -214,9 +213,9 @@ class GemmaCausalLM(CausalLM):
             caches.append(next_cache)
 
         cache = ops.stack(caches, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
+        x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-        return logits, hidden_states, cache
+        return {**inputs, "cache": cache}, logits
 
     def score(
         self,

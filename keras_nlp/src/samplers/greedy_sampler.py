@@ -39,5 +39,6 @@ class GreedySampler(Sampler):
     causal_lm.generate(["Keras is a"])
     ```
     """
+
     def get_next_token(self, probabilities):
         return ops.argmax(probabilities, axis=-1)

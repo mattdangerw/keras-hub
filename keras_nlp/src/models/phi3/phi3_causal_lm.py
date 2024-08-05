@@ -20,7 +20,6 @@ from keras_nlp.src.models.phi3.phi3_causal_lm_preprocessor import (
     Phi3CausalLMPreprocessor,
 )
 from keras_nlp.src.utils.python_utils import classproperty
-from keras_nlp.src.utils.tensor_utils import any_equal
 
 
 @keras_nlp_export("keras_nlp.models.Phi3CausalLM")

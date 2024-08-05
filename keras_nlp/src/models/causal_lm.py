@@ -77,46 +77,6 @@ class CausalLM(Task):
         # Default compilation.
         self.compile()
 
-    def build_cache(self, batch_size, max_length):
-        """Builds an empty cache for use with `call_with_cache`.
-
-        Args:
-            batch_size: int. The size of the batch for generation.
-            max_length: int. The maximum sequence length for the cache.
-
-        Returns:
-            A cache Tensor, the exact shape will depend on the model.
-        """
-        raise NotImplementedError
-
-    def call_with_cache(self, token_ids, cache, index):
-        """Forward pass with cache for generation.
-
-        `call_with_cache` adds an additional forward pass for the model for
-        autoregressive inference. Unlike calling the model directly, this method
-        allows caching previous key/value results in multi-head attention layer,
-        and avoids recomputing the outputs of seen tokens.
-
-        Args:
-            token_ids: a dense int Tensor with shape `(batch_size, n)`, where
-                `n` is some sequence length less than or equal to the max
-                length of the cache. Usually `n` is either the full cache
-                length, to "prefill" the prompt cache values, or `1`, to predict
-                single token id.
-            cache: a dense float Tensor. The cache of key and value projections
-                used in the attention layers of the model. The exact shape will
-                depend on the model.
-            index: int, or int Tensor. The index of the first token of
-                `token_ids` in the entire generated sequence.
-
-        Returns:
-            A `(logits, hidden_states, cache)` tuple. Where `logits` is the
-            language model logits for the input token_ids, `hidden_states` is
-            the final hidden representation of the input tokens, and `cache` is
-            the updated decoding cache.
-        """
-        raise NotImplementedError
-
     def compile(
         self,
         optimizer="auto",
@@ -180,122 +140,172 @@ class CausalLM(Task):
         # Clear the compiled generate function.
         self.generate_function = None
 
-    def generate_step(
+    def generate(
+        self,
+        inputs,
+        max_length=None,
+        stop_token_ids="auto",
+    ):
+        """Generate text given prompt `inputs`.
+
+        This method generates text based on given `inputs`. The sampling method
+        used for generation can be set via the `compile()` method.
+
+        If `inputs` are a `tf.data.Dataset`, outputs will be generated
+        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
+        as a single batch.
+
+        If a `preprocessor` is attached to the model, `inputs` will be
+        preprocessed inside the `generate()` function and should match the
+        structure expected by the `preprocessor` layer (usually raw strings). If
+        a `preprocessor` is not attached, inputs should match the structure
+        expected by the `backbone`. See the example usage above for a
+        demonstration of each.
+
+        Args:
+            inputs: python data, tensor data, or a `tf.data.Dataset`. If a
+                `preprocessor` is attached to the model, `inputs` should match
+                the structure expected by the `preprocessor` layer. If a
+                `preprocessor` is not attached, `inputs` should match the
+                structure expected the `backbone` model.
+            max_length: Optional. int. The max length of the generated sequence.
+                Will default to the max configured `sequence_length` of the
+                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
+                should be padded to the desired maximum length and this argument
+                will be ignored.
+            stop_token_ids: Optional. `None`, "auto", or tuple of token ids.
+                Defaults to "auto" which uses the
+                `preprocessor.tokenizer.end_token_id`. Not specifying a
+                processor will produce an error. None stops generation after
+                generating `max_length` tokens. You may also specify a list of
+                token id's the model should stop on. Note that sequences of
+                tokens will each be interpreted as a stop token, multi-token
+                stop sequences are not supported.
+        """
+        # Setup our three main passes.
+        # 1. Optionally preprocessing strings to dense integer tensors.
+        # 2. Generate new tokens via a compiled function on dense tensors.
+        # 3. Optionally postprocess dense integer tensors back to string.
+        generate_function = self.make_generate_function()
+
+        if self.preprocessor is None and stop_token_ids == "auto":
+            raise ValueError(
+                "A `preprocessor` must be attached to the model if "
+                "`stop_token_ids='auto'`. Currently `preprocessor=None`. To "
+                "call `generate()` with preprocessing detached, either pass "
+                "`stop_token_ids=None` to always generate until `max_length` "
+                "or pass a tuple of token ids that should terminate generation "
+                "as `stop_token_ids`."
+            )
+        elif stop_token_ids == "auto":
+            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
+
+        def preprocess(x):
+            return self.preprocessor.generate_preprocess(
+                x, sequence_length=max_length
+            )
+
+        def generate(x):
+            x = tree.map_structure(ops.convert_to_tensor, x)
+            return generate_function(x, stop_token_ids=stop_token_ids)
+
+        def postprocess(x):
+            return self.preprocessor.generate_postprocess(x)
+
+        # Normalize inputs, apply our three passes, and normalize outputs.
+        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
+
+        if self.preprocessor is not None:
+            if isinstance(inputs, tf.data.Dataset):
+                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
+                inputs = inputs.prefetch(tf.data.AUTOTUNE)
+            else:
+                # Fast path for non-dataset, single-batch input.
+                inputs = [preprocess(data) for data in inputs]
+
+        outputs = [generate(x) for x in inputs]
+
+        if self.preprocessor is not None:
+            outputs = [postprocess(data) for data in outputs]
+
+        return self._normalize_generate_outputs(outputs, input_is_scalar)
+
+    # To override is subclasses.
+    def get_generate_inputs(self, inputs):
+        """Get the model specific generation inputs."""
+        raise NotImplementedError
+
+    def generate_call(self, inputs, index, length=1):
+        """Compute model outputs at a specific index."""
+        raise NotImplementedError
+
+    def get_generate_outputs(self, inputs):
+        """Get the model specific generation outputs."""
+        return {
+            "token_ids": inputs["token_ids"],
+            "padding_mask": inputs["padding_mask"],
+        }
+
+    # Most subclasses should not override these.
+    def generate_loop(
         self,
         inputs,
         stop_token_ids=None,
     ):
-        """Run an entire generation loop on a single input batch."""
-        data = self.generate_start(inputs)
+        """Uncompiled generation loop on a single input batch."""
+        inputs = self.get_generate_inputs(inputs)
+        inputs = self.sampler.start(inputs)
 
-        def cond(data, index):
-            return self.is_decoding(
-                data=data,
-                index=index,
-                stop_token_ids=stop_token_ids,
-            )
+        def cond(inputs, index):
+            return self.sampler.alive(inputs, index, stop_token_ids)
 
-        def body(data, index):
-            return self.decode(data, index)
+        def body(inputs, index):
+            inputs, logits = self.generate_call(inputs, index)
+            inputs = self.sampler.sample(inputs, index, logits)
+            return inputs, index + 1
 
-        vars = (data, ops.array(0))
-        data, index = ops.while_loop(cond, body, vars)
-        return self.generate_finish(data)
+        vars = (inputs, ops.array(0))
+        inputs, index = ops.while_loop(cond, body, vars)
+        inputs = self.sampler.finish(inputs)
+        return self.get_generate_outputs(inputs)
 
-    def stateless_generate_step(
+    def stateless_generate_loop(
         self,
         state,
         inputs,
         stop_token_ids=None,
     ):
-        """Stateless version of `generate_step()` for use with Jax."""
-        with self.generate_stateless_scope(state) as scope:
-            data = self.generate_start(inputs)
-        state = self.update_generate_state(state, scope)
+        """Jax friendly, stateless version of `generate_loop`."""
+        inputs = self.get_generate_inputs(inputs)
+        inputs = self.sampler.start(inputs)
 
-        def cond(state, data, index):
-            return self.is_decoding(
-                data=data,
-                index=index,
-                stop_token_ids=stop_token_ids,
-            )
+        def cond(state, inputs, index):
+            return self.sampler.alive(inputs, index, stop_token_ids)
 
-        def body(state, data, index):
+        def body(state, inputs, index):
             with self.generate_stateless_scope(state) as scope:
-                data, index = self.decode(data, index)
-            state = self.update_generate_state(state, scope)
-            return state, data, index
+                inputs, logits = self.generate_call(inputs, index)
+                inputs = self.sampler.sample(inputs, index, logits)
+            state = self.update_generate_variables(state, scope)
+            return state, inputs, index + 1
 
-        vars = (state, data, ops.array(0))
-        state, data, index = ops.while_loop(cond, body, vars)
+        vars = (state, inputs, ops.array(0))
+        state, inputs, index = ops.while_loop(cond, body, vars)
+        inputs = self.sampler.finish(inputs)
         # Only return sampler variables from generation. Weights do not change,
         # and returning them across the compilation boundary is slow.
-        return state[0], self.generate_finish(data)
+        return state[0], self.get_generate_outputs(inputs)
 
-    def is_decoding(self, data, index, stop_token_ids=None):
-        """Returns true if decoding should continue."""
-        return self.sampler.has_next(
-            data=data,
-            index=index,
-            stop_token_ids=stop_token_ids,
-        )
-
-    def decode(self, data, index):
-        """Sample a single token of output."""
-        # Run a forward pass with a single token id, and full length cache.
-        logits, hidden_states, cache = self.call_with_cache(
-            token_ids=data["token_ids"][:, index][:, None],
-            cache=data["cache"],
-            index=index,
-        )
-        # Update our data dict.
-        data = {
-            **data,
-            "cache": cache,
-            "hidden_states": ops.slice_update(
-                data["hidden_states"], [0, index, 0], hidden_states
-            ),
-        }
-        # Generate the next token.
-        data = self.sampler.next(
-            data=data,
-            index=index,
-            logits=logits[:, 0, :],
-        )
-        return data, index + 1
-
-    def generate_start(self, data):
-        """Run inference on the entire input sequence to seed generate data."""
-        # Add model specific generation inputs.
-        data = self.get_generate_inputs(data)
-        # Add sampling beams, other sampling state.
-        return self.sampler.start(data)
-
-    def generate_finish(self, data):
-        # Remove sampling beams, other sampling state.
-        data = self.sampler.finish(data)
-        # Remove model generation outputs.
-        return self.get_generate_outputs(data)
-
-    def get_generate_inputs(self, data):
-        raise NotImplementedError
-
-    def get_generate_outputs(self, data):
-        return {
-            "token_ids": data["token_ids"],
-            "padding_mask": data["padding_mask"],
-        }
-
-    def get_generate_state(self):
-        """Get a tuple of all model state used during generation."""
+    def get_generate_variables(self):
+        """Get a tuple of all model variables used during generation."""
         return (
             self.sampler.variables,
             [v.value for v in self.trainable_variables],
             [v.value for v in self.non_trainable_variables],
         )
 
-    def update_generate_state(self, state, scope):
-        """Updates sampler variables given a `StatelessScope`."""
+    def update_generate_variables(self, state, scope):
+        """Updates generate variables given a `StatelessScope`."""
         # Update all sampler variables.
         sampler_variables = []
         for v in self.sampler.variables:
@@ -322,50 +332,50 @@ class CausalLM(Task):
         if self.generate_function is not None:
             return self.generate_function
 
-        self.generate_function = self.generate_step
+        self.generate_function = self.generate_loop
         if keras.config.backend() == "torch":
             import torch
 
-            def wrapped_generate_step(
-                data,
+            def wrapped_generate_loop(
+                inputs,
                 stop_token_ids=None,
             ):
                 with torch.no_grad():
-                    return self.generate_step(data, stop_token_ids)
+                    return self.generate_loop(inputs, stop_token_ids)
 
-            self.generate_function = wrapped_generate_step
+            self.generate_function = wrapped_generate_loop
         elif keras.config.backend() == "tensorflow" and not self.run_eagerly:
             self.generate_function = tf.function(
-                self.generate_step, jit_compile=self.jit_compile
+                self.generate_loop, jit_compile=self.jit_compile
             )
         elif keras.config.backend() == "jax":
             import jax
 
             if self.run_eagerly:
-                compiled_generate_step = self.stateless_generate_step
+                compiled_generate_loop = self.stateless_generate_loop
             else:
-                compiled_generate_step = jax.jit(
-                    self.stateless_generate_step,
+                compiled_generate_loop = jax.jit(
+                    self.stateless_generate_loop,
                     static_argnames=["stop_token_ids"],
                 )
 
             # Wrap the compiled function to do state passing.
-            def wrapped_generate_step(
-                data,
+            def wrapped_generate_loop(
+                inputs,
                 stop_token_ids=None,
             ):
                 if stop_token_ids is not None:
                     stop_token_ids = tuple(stop_token_ids)
-                sample_variables, data = compiled_generate_step(
-                    self.get_generate_state(),
-                    data,
+                sample_variables, outputs = compiled_generate_loop(
+                    self.get_generate_variables(),
+                    inputs,
                     stop_token_ids=stop_token_ids,
                 )
                 for ref_v, v in zip(self.sampler.variables, sample_variables):
                     ref_v.assign(v)
-                return data
+                return outputs
 
-            self.generate_function = wrapped_generate_step
+            self.generate_function = wrapped_generate_loop
 
         return self.generate_function
 
@@ -439,91 +449,3 @@ class CausalLM(Task):
                 normalized[key] = normalize([x[key] for x in outputs])
             return normalized
         return normalize([x for x in outputs])
-
-    def generate(
-        self,
-        inputs,
-        max_length=None,
-        stop_token_ids="auto",
-    ):
-        """Generate text given prompt `inputs`.
-
-        This method generates text based on given `inputs`. The sampling method
-        used for generation can be set via the `compile()` method.
-
-        If `inputs` are a `tf.data.Dataset`, outputs will be generated
-        "batch-by-batch" and concatenated. Otherwise, all inputs will be handled
-        as a single batch.
-
-        If a `preprocessor` is attached to the model, `inputs` will be
-        preprocessed inside the `generate()` function and should match the
-        structure expected by the `preprocessor` layer (usually raw strings).
-        If a `preprocessor` is not attached, inputs should match the structure
-        expected by the `backbone`. See the example usage above for a
-        demonstration of each.
-
-        Args:
-            inputs: python data, tensor data, or a `tf.data.Dataset`. If a
-                `preprocessor` is attached to the model, `inputs` should match
-                the structure expected by the `preprocessor` layer. If a
-                `preprocessor` is not attached, `inputs` should match the
-                structure expected the `backbone` model.
-            max_length: Optional. int. The max length of the generated sequence.
-                Will default to the max configured `sequence_length` of the
-                `preprocessor`. If `preprocessor` is `None`, `inputs` should be
-                should be padded to the desired maximum length and this argument
-                will be ignored.
-            stop_token_ids: Optional. `None`, "auto", or tuple of token ids. Defaults
-                to "auto" which uses the `preprocessor.tokenizer.end_token_id`.
-                Not specifying a processor will produce an error. None stops
-                generation after generating `max_length` tokens. You may also
-                specify a list of token id's the model should stop on. Note that
-                sequences of tokens will each be interpreted as a stop token,
-                multi-token stop sequences are not supported.
-        """
-        # Setup our three main passes.
-        # 1. Optionally preprocessing strings to dense integer tensors.
-        # 2. Generate new tokens via a compiled function on dense tensors.
-        # 3. Optionally postprocess dense integer tensors back to string.
-        generate_function = self.make_generate_function()
-
-        if self.preprocessor is None and stop_token_ids == "auto":
-            raise ValueError(
-                'A `preprocessor` must be attached to the model if `stop_token_ids="auto"`. '
-                "Currently `preprocessor=None`. To call `generate()` with preprocessing "
-                "detached, either pass `stop_token_ids=None` to always generate until "
-                "`max_length` or pass a tuple of token ids that should terminate generation "
-                "as `stop_token_ids`."
-            )
-        elif stop_token_ids == "auto":
-            stop_token_ids = [self.preprocessor.tokenizer.end_token_id]
-
-        def preprocess(x):
-            return self.preprocessor.generate_preprocess(
-                x, sequence_length=max_length
-            )
-
-        def generate(x):
-            x = tree.map_structure(ops.convert_to_tensor, x)
-            return generate_function(x, stop_token_ids=stop_token_ids)
-
-        def postprocess(x):
-            return self.preprocessor.generate_postprocess(x)
-
-        # Normalize inputs, apply our three passes, and normalize outputs.
-        inputs, input_is_scalar = self._normalize_generate_inputs(inputs)
-
-        if self.preprocessor is not None:
-            if isinstance(inputs, tf.data.Dataset):
-                inputs = inputs.map(preprocess, tf.data.AUTOTUNE)
-                inputs = inputs.prefetch(tf.data.AUTOTUNE)
-            else:
-                # Fast path for non-dataset, single-batch input.
-                inputs = [preprocess(data) for data in inputs]
-
-        outputs = [generate(x) for x in inputs]
-
-        if self.preprocessor is not None:
-            outputs = [postprocess(data) for data in outputs]
-
-        return self._normalize_generate_outputs(outputs, input_is_scalar)

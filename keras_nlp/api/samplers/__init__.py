@@ -18,7 +18,6 @@ since your modifications would be overwritten.
 """
 
 from keras_nlp.src.samplers.beam_sampler import BeamSampler
-from keras_nlp.src.samplers.contrastive_sampler import ContrastiveSampler
 from keras_nlp.src.samplers.greedy_sampler import GreedySampler
 from keras_nlp.src.samplers.random_sampler import RandomSampler
 from keras_nlp.src.samplers.sampler import Sampler
