@@ -150,6 +150,7 @@ class PaliGemmaCausalLM(CausalLM):
         )
 
     def get_generate_inputs(self, inputs):
+        # TODO: dense prompt mask!!! Prompt must be precomputed.
         batch_size, length = ops.shape(inputs["token_ids"])
         images = inputs["images"]
         if len(ops.shape(images)) == 3:
