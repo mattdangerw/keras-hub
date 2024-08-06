@@ -149,32 +149,36 @@ class PaliGemmaCausalLM(CausalLM):
             **kwargs,
         )
 
-    def build_cache(self, batch_size, max_length):
-        max_length += self.backbone.image_sequence_length
+    def get_generate_inputs(self, inputs):
+        batch_size, length = ops.shape(inputs["token_ids"])
+        length += self.backbone.image_sequence_length
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
-        shape = [batch_size, num_layers, 2, max_length, num_heads, head_dim]
-        return ops.zeros(shape, dtype=self.compute_dtype)
+        cache_shape = [batch_size, num_layers, 2, length, num_heads, head_dim]
+        cache = ops.zeros(cache_shape, dtype=self.compute_dtype)
+        # We can capture our image embedding information in generation cache.
+        image_embeddings = self.backbone.vit_encoder(inputs["images"])
+        _, cache = self._call_transformer_cached(image_embeddings, cache)
+        return {
+            **inputs,
+            "cache": cache,
+        }
 
-    def call_with_cache(
-        self,
-        token_ids,
-        cache,
-        cache_update_index,
-        img_embeddings=None,
-        padding_mask=None,
-    ):
-        text_embeddings = self.backbone.token_embedding(token_ids)
-        text_embeddings = text_embeddings * ops.cast(
-            ops.sqrt(self.backbone.hidden_dim), text_embeddings.dtype
-        )
+    def generate_call(self, inputs, index, length=1):
+        cache = inputs["token_ids"]
+        x = self.backbone.token_embedding(inputs["token_ids"])
+        x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
+        index = index + self.backbone.image_sequence_length
+        x, cache = self._call_transformer_cached(x, cache, index)
+        x = self.backbone.layer_norm(x)
+        logits = self.backbone.token_embedding(x, reverse=True)
+        return logits, {
+            **inputs,
+            "cache": cache, # Update the cache.
+        }
 
-        if img_embeddings is not None:
-            x = ops.concatenate((img_embeddings, text_embeddings), axis=1)
-        else:
-            x = text_embeddings
-
+    def _call_transformer_cached(self, x, cache, index=0):
         # Each decoder layer has a cache; we update them separately.
         caches = []
         for i, transformer_layer in enumerate(self.backbone.transformer_layers):
@@ -182,11 +186,8 @@ class PaliGemmaCausalLM(CausalLM):
             x, next_cache = transformer_layer(
                 x,
                 cache=current_cache,
-                cache_update_index=cache_update_index,
-                padding_mask=padding_mask,
+                cache_update_index=index,
             )
             caches.append(next_cache)
         cache = ops.stack(caches, axis=1)
-        hidden_states = x = self.backbone.layer_norm(x)
-        logits = self.backbone.token_embedding(x, reverse=True)
-        return logits, hidden_states, cache
+        return x, cache

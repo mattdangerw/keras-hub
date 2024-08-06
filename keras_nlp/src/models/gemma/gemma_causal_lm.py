@@ -197,7 +197,9 @@ class GemmaCausalLM(CausalLM):
         }
 
     def generate_call(self, inputs, index, length=1):
-        token_ids = inputs["token_ids"][:, index][:, None]
+        token_ids = inputs["token_ids"]
+        batch_size, max_length = ops.shape(token_ids)
+        token_ids = ops.slice(token_ids, (0, index), (batch_size, length))
         cache = inputs["cache"]
         x = self.backbone.token_embedding(token_ids)
         x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
@@ -215,7 +217,10 @@ class GemmaCausalLM(CausalLM):
         cache = ops.stack(caches, axis=1)
         x = self.backbone.layer_norm(x)
         logits = self.backbone.token_embedding(x, reverse=True)
-        return {**inputs, "cache": cache}, logits
+        return logits, {
+            **inputs,
+            "cache": cache, # Update the cache.
+        }
 
     def score(
         self,

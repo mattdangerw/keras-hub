@@ -230,7 +230,7 @@ class CausalLM(Task):
 
         return self._normalize_generate_outputs(outputs, input_is_scalar)
 
-    # To override is subclasses.
+    # ===== To override in subclasses =====
     def get_generate_inputs(self, inputs):
         """Get the model specific generation inputs."""
         raise NotImplementedError
@@ -246,7 +246,7 @@ class CausalLM(Task):
             "padding_mask": inputs["padding_mask"],
         }
 
-    # Most subclasses should not override these.
+    # ===== Most subclasses should not override these ===
     def generate_loop(
         self,
         inputs,
@@ -276,8 +276,10 @@ class CausalLM(Task):
         stop_token_ids=None,
     ):
         """Jax friendly, stateless version of `generate_loop`."""
-        inputs = self.get_generate_inputs(inputs)
-        inputs = self.sampler.start(inputs)
+        with self.generate_stateless_scope(state) as scope:
+            inputs = self.get_generate_inputs(inputs)
+            inputs = self.sampler.start(inputs)
+        state = self.update_generate_variables(state, scope)
 
         def cond(state, inputs, index):
             return self.sampler.alive(inputs, index, stop_token_ids)
