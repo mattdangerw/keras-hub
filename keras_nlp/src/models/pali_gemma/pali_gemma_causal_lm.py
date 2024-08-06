@@ -151,23 +151,29 @@ class PaliGemmaCausalLM(CausalLM):
 
     def get_generate_inputs(self, inputs):
         batch_size, length = ops.shape(inputs["token_ids"])
+        images = inputs["images"]
+        if len(ops.shape(images)) == 3:
+            images = ops.expand_dims(images, 0)
         length += self.backbone.image_sequence_length
         num_layers = self.backbone.num_layers
         num_heads = self.backbone.num_key_value_heads
         head_dim = self.backbone.head_dim
         cache_shape = [batch_size, num_layers, 2, length, num_heads, head_dim]
         cache = ops.zeros(cache_shape, dtype=self.compute_dtype)
-        # We can capture our image embedding information in generation cache.
-        image_embeddings = self.backbone.vit_encoder(inputs["images"])
+        image_embeddings = self.backbone.vit_encoder(images)
         _, cache = self._call_transformer_cached(image_embeddings, cache)
+        # All information about the images is now captured in the cache.
         return {
             **inputs,
             "cache": cache,
         }
 
     def generate_call(self, inputs, index, length=1):
-        cache = inputs["token_ids"]
-        x = self.backbone.token_embedding(inputs["token_ids"])
+        token_ids = inputs["token_ids"]
+        batch_size, max_length = ops.shape(token_ids)
+        token_ids = ops.slice(token_ids, (0, index), (batch_size, length))
+        cache = inputs["cache"]
+        x = self.backbone.token_embedding(token_ids)
         x = x * ops.cast(ops.sqrt(self.backbone.hidden_dim), x.dtype)
         index = index + self.backbone.image_sequence_length
         x, cache = self._call_transformer_cached(x, cache, index)

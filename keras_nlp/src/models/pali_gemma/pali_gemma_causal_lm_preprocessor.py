@@ -90,6 +90,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
             add_end_value=self.add_end_token,
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
+        padding_mask = ops.cast(padding_mask, "int32")
         response_mask = segment_ids == 1
         # The last token does not have a next token, so we truncate it out.
         x = {
@@ -138,6 +139,7 @@ class PaliGemmaCausalLMPreprocessor(GemmaCausalLMPreprocessor):
             add_end_value=False,
         )
         padding_mask = token_ids != self.tokenizer.pad_token_id
+        padding_mask = ops.cast(padding_mask, "int32")
         response_mask = segment_ids == 1
         return {
             "images": images,

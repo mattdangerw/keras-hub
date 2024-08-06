@@ -247,88 +247,6 @@ class CausalLM(Task):
         }
 
     # ===== Most subclasses should not override these ===
-    def generate_loop(
-        self,
-        inputs,
-        stop_token_ids=None,
-    ):
-        """Uncompiled generation loop on a single input batch."""
-        inputs = self.get_generate_inputs(inputs)
-        inputs = self.sampler.start(inputs)
-
-        def cond(inputs, index):
-            return self.sampler.alive(inputs, index, stop_token_ids)
-
-        def body(inputs, index):
-            inputs, logits = self.generate_call(inputs, index)
-            inputs = self.sampler.sample(inputs, index, logits)
-            return inputs, index + 1
-
-        vars = (inputs, ops.array(0))
-        inputs, index = ops.while_loop(cond, body, vars)
-        inputs = self.sampler.finish(inputs)
-        return self.get_generate_outputs(inputs)
-
-    def stateless_generate_loop(
-        self,
-        state,
-        inputs,
-        stop_token_ids=None,
-    ):
-        """Jax friendly, stateless version of `generate_loop`."""
-        with self.generate_stateless_scope(state) as scope:
-            inputs = self.get_generate_inputs(inputs)
-            inputs = self.sampler.start(inputs)
-        state = self.update_generate_variables(state, scope)
-
-        def cond(state, inputs, index):
-            return self.sampler.alive(inputs, index, stop_token_ids)
-
-        def body(state, inputs, index):
-            with self.generate_stateless_scope(state) as scope:
-                inputs, logits = self.generate_call(inputs, index)
-                inputs = self.sampler.sample(inputs, index, logits)
-            state = self.update_generate_variables(state, scope)
-            return state, inputs, index + 1
-
-        vars = (state, inputs, ops.array(0))
-        state, inputs, index = ops.while_loop(cond, body, vars)
-        inputs = self.sampler.finish(inputs)
-        # Only return sampler variables from generation. Weights do not change,
-        # and returning them across the compilation boundary is slow.
-        return state[0], self.get_generate_outputs(inputs)
-
-    def get_generate_variables(self):
-        """Get a tuple of all model variables used during generation."""
-        return (
-            self.sampler.variables,
-            [v.value for v in self.trainable_variables],
-            [v.value for v in self.non_trainable_variables],
-        )
-
-    def update_generate_variables(self, state, scope):
-        """Updates generate variables given a `StatelessScope`."""
-        # Update all sampler variables.
-        sampler_variables = []
-        for v in self.sampler.variables:
-            new_v = scope.get_current_value(v)
-            sampler_variables.append(new_v if new_v is not None else v)
-        return (sampler_variables,) + state[1:]
-
-    def generate_stateless_scope(self, state):
-        """Get stateless scope for using model state without side effect."""
-        (
-            sampler_variables,
-            trainable_variables,
-            non_trainable_variables,
-        ) = state
-        mapping = itertools.chain(
-            zip(self.sampler.variables, sampler_variables),
-            zip(self.trainable_variables, trainable_variables),
-            zip(self.non_trainable_variables, non_trainable_variables),
-        )
-        return keras.StatelessScope(state_mapping=mapping)
-
     def make_generate_function(self):
         """Create or return the compiled generation function."""
         if self.generate_function is not None:
@@ -380,6 +298,88 @@ class CausalLM(Task):
             self.generate_function = wrapped_generate_loop
 
         return self.generate_function
+
+    def generate_loop(
+        self,
+        inputs,
+        stop_token_ids=None,
+    ):
+        """Uncompiled generation loop on a single input batch."""
+        inputs = self.get_generate_inputs(inputs)
+        inputs = self.sampler.start(inputs)
+
+        def cond(inputs, index):
+            return self.sampler.alive(inputs, index, stop_token_ids)
+
+        def body(inputs, index):
+            logits, inputs = self.generate_call(inputs, index)
+            inputs = self.sampler.sample(inputs, index, logits)
+            return inputs, index + 1
+
+        vars = (inputs, ops.array(0))
+        inputs, index = ops.while_loop(cond, body, vars)
+        inputs = self.sampler.finish(inputs)
+        return self.get_generate_outputs(inputs)
+
+    def stateless_generate_loop(
+        self,
+        state,
+        inputs,
+        stop_token_ids=None,
+    ):
+        """Jax friendly, stateless version of `generate_loop`."""
+        with self.generate_stateless_scope(state) as scope:
+            inputs = self.get_generate_inputs(inputs)
+            inputs = self.sampler.start(inputs)
+        state = self.update_generate_variables(state, scope)
+
+        def cond(state, inputs, index):
+            return self.sampler.alive(inputs, index, stop_token_ids)
+
+        def body(state, inputs, index):
+            with self.generate_stateless_scope(state) as scope:
+                logits, inputs = self.generate_call(inputs, index)
+                inputs = self.sampler.sample(inputs, index, logits)
+            state = self.update_generate_variables(state, scope)
+            return state, inputs, index + 1
+
+        vars = (state, inputs, ops.array(0))
+        state, inputs, index = ops.while_loop(cond, body, vars)
+        inputs = self.sampler.finish(inputs)
+        # Only return sampler variables from generation. Weights do not change,
+        # and returning them across the compilation boundary is slow.
+        return state[0], self.get_generate_outputs(inputs)
+
+    def get_generate_variables(self):
+        """Get a tuple of all model variables used during generation."""
+        return (
+            self.sampler.variables,
+            [v.value for v in self.trainable_variables],
+            [v.value for v in self.non_trainable_variables],
+        )
+
+    def update_generate_variables(self, state, scope):
+        """Updates generate variables given a `StatelessScope`."""
+        # Update all sampler variables.
+        sampler_variables = []
+        for v in self.sampler.variables:
+            new_v = scope.get_current_value(v)
+            sampler_variables.append(new_v if new_v is not None else v)
+        return (sampler_variables,) + state[1:]
+
+    def generate_stateless_scope(self, state):
+        """Get stateless scope for using model state without side effect."""
+        (
+            sampler_variables,
+            trainable_variables,
+            non_trainable_variables,
+        ) = state
+        mapping = itertools.chain(
+            zip(self.sampler.variables, sampler_variables),
+            zip(self.trainable_variables, trainable_variables),
+            zip(self.non_trainable_variables, non_trainable_variables),
+        )
+        return keras.StatelessScope(state_mapping=mapping)
 
     def _normalize_generate_inputs(
         self,
