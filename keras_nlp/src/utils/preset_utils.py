@@ -656,7 +656,7 @@ class PresetLoader:
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
-    def load_task(self, cls, load_weights, **kwargs):
+    def load_task(self, cls, load_weights, load_head_weights, **kwargs):
         """Load a task model from the preset.
 
         By default, we create a task from a backbone and preprocessor with
@@ -704,21 +704,22 @@ class KerasPresetLoader(PresetLoader):
         tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
-    def load_task(self, cls, load_weights, **kwargs):
+    def load_task(self, cls, load_weights, load_head_weights, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the
         # super class loader.
         if not check_file_exists(self.preset, TASK_CONFIG_FILE):
-            return super().load_task(cls, load_weights, **kwargs)
+            return super().load_task(cls, load_weights, load_head_weights, **kwargs)
         task_config = load_json(self.preset, TASK_CONFIG_FILE)
         if not issubclass(check_config_class(task_config), cls):
-            return super().load_task(cls, load_weights, **kwargs)
+            return super().load_task(cls, load_weights, load_head_weights, **kwargs)
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
         if task.preprocessor is not None:
             task.preprocessor.tokenizer.load_preset_assets(self.preset)
         if load_weights:
-            jax_memory_cleanup(task)
-            if check_file_exists(self.preset, TASK_WEIGHTS_FILE):
+            jax_memory_cleanup(task.backbone)
+            has_head_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
+            if has_head_weights and load_head_weights:
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
             backbone_weights = get_file(self.preset, MODEL_WEIGHTS_FILE)

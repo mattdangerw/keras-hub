@@ -146,6 +146,7 @@ class Task(PipelineModel):
         cls,
         preset,
         load_weights=True,
+        load_head_weights=True,
         **kwargs,
     ):
         """Instantiate a `keras_nlp.models.Task` from a model preset.
@@ -171,9 +172,13 @@ class Task(PipelineModel):
         Args:
             preset: string. A built in preset identifier, a Kaggle Models
                 handle, a Hugging Face handle, or a path to a local directory.
-            load_weights: bool. If `True`, the weights will be loaded into the
-                model architecture. If `False`, the weights will be randomly
-                initialized.
+            load_weights: bool. If `True`, the backbone weights will be loaded
+                into the model architecture. If `False`, the weights will be
+                randomly initialized.
+            load_head_weights: bool. If `True`, and the save preset has weights
+                that are not part of the backbone (e.g. a classification head),
+                these weights will be loaded into the model architecture. If
+                `False`, the weights will be randomly initialized.
 
         Examples:
         ```python
@@ -201,7 +206,7 @@ class Task(PipelineModel):
         # Detect the correct subclass if we need to.
         if cls.backbone_cls != backbone_cls:
             cls = find_subclass(preset, cls, backbone_cls)
-        return loader.load_task(cls, load_weights, **kwargs)
+        return loader.load_task(cls, load_weights, load_head_weights, **kwargs)
 
     def load_task_weights(self, filepath):
         """Load only the tasks specific weights not in the backbone."""
