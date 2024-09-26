@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import inspect
 import os
 
 import keras
@@ -73,7 +74,12 @@ class Task(PipelineModel):
 
     def preprocess_samples(self, x, y=None, sample_weight=None):
         if self.preprocessor is not None:
-            return self.preprocessor(x, y=y, sample_weight=sample_weight)
+            params = inspect.signature(self.preprocessor).parameters
+            if all(k in params for k in ("x", "y", "sample_weight")):
+                return self.preprocessor(x, y=y, sample_weight=sample_weight)
+            else:
+                x = self.preprocessor(x)
+                return keras.utils.pack_x_y_sample_weight(x, y, sample_weight)
         else:
             return super().preprocess_samples(x, y, sample_weight)
 
@@ -342,17 +348,17 @@ class Task(PipelineModel):
                 )
 
             tokenizer = self.preprocessor.tokenizer
-            if tokenizer:
+            if hasattr(preprocessor, "tokenizer"):
                 info = "Vocab size: "
                 info += highlight_number(tokenizer.vocabulary_size())
                 add_layer(tokenizer, info)
             image_converter = self.preprocessor.image_converter
-            if image_converter:
+            if hasattr(preprocessor, "image_converter"):
                 info = "Image size: "
                 info += highlight_shape(image_converter.image_size())
                 add_layer(image_converter, info)
             audio_converter = self.preprocessor.audio_converter
-            if audio_converter:
+            if hasattr(preprocessor, "audio_converter"):
                 info = "Audio shape: "
                 info += highlight_shape(audio_converter.audio_shape())
                 add_layer(audio_converter, info)
