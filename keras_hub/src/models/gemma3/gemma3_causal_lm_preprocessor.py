@@ -511,25 +511,30 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # === Input extraction and validation ===
 
         # Extract text part of the input.
-        prompts, responses = x["prompts"], x["responses"]
-        tf.debugging.assert_shapes([(prompts, ("N",)), (responses, ("N",))])
+        if isinstance(x, dict):
+            prompts, responses = x["prompts"], x["responses"]
+            tf.debugging.assert_shapes([(prompts, ("N",)), (responses, ("N",))])
+            images = x.get("images", None)
+            has_prompt = True
+        else:
+            responses = tf.convert_to_tensor(x)
+            prompts = None
+            images = None
+            has_prompt = False
 
         # Find out if the input is batched/not batched. Uprank if not batched.
         # In other preprocessors, we don't have to do this, but here, all
         # the following logic (indices, etc.) uses tensors with a batch dim.
         # We will squeeze these back at the end.
         batched = True
-        if isinstance(prompts, str):
+        if isinstance(responses, str):
             batched = False
-            prompts = [prompts]
+            prompts = [prompts] if has_prompt else None
             responses = [responses]
-        if isinstance(prompts, tf.Tensor) and len(prompts.shape) == 0:
+        if isinstance(responses, tf.Tensor) and len(responses.shape) == 0:
             batched = False
-            prompts = tf.expand_dims(prompts, axis=0)
-            responses = tf.expand_dims(responses, axis=0)
-
-        # Extract images from the input.
-        images = x.get("images", None)
+            prompts = prompts[None] if has_prompt else None
+            responses = responses[None]
 
         # There are 8 cases, based on values of
         # a = `self.text_only_model`, b = `images` is `None`, and whether
@@ -563,18 +568,20 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
         # === Tokenization, padding, etc. ===
 
         # Tokenise the inputs.
-        prompts = self.tokenizer(prompts)
-        responses = self.tokenizer(responses)
+        if has_prompt:
+            segments = (self.tokenizer(prompts), self.tokenizer(responses))
+        else:
+            segments = (self.tokenizer(responses),)
 
         # Padding.
         token_ids, segment_ids = self.packer(
-            (prompts, responses),
+            segments,
             sequence_length=sequence_length + 1,
             add_start_value=self.add_start_token,
             add_end_value=self.add_end_token,
         )
-        response_mask = segment_ids == 1
         padding_mask = token_ids != self.tokenizer.pad_token_id
+        response_mask = segment_ids == 1 if has_prompt else padding_mask
 
         # === Text Model ===
         if self.text_only_model:
@@ -600,7 +607,7 @@ class Gemma3CausalLMPreprocessor(CausalLMPreprocessor):
 
         # === Vision processing ===
 
-        batch_size = tf.shape(prompts)[0]
+        batch_size = tf.shape(responses)[0]
         desired_height = self.image_converter.image_size[0]
         desired_width = self.image_converter.image_size[1]
         if images is None:

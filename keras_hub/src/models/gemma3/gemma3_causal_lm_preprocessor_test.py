@@ -65,6 +65,22 @@ class Gemma3CausalLMPreprocessorTest(TestCase):
             ),
         )
 
+    def test_text_preprocessor_single_string_input(self):
+        input_data = ["the quick brown fox"]
+        self.run_preprocessing_layer_test(
+            cls=Gemma3CausalLMPreprocessor,
+            init_kwargs=self.init_text_kwargs,
+            input_data=input_data,
+            expected_output=(
+                {
+                    "token_ids": [[1, 9, 14, 10, 12, 2, 0, 0]],
+                    "padding_mask": [[1, 1, 1, 1, 1, 1, 0, 0]],
+                },
+                [[9, 14, 10, 12, 2, 0, 0, 0]],  # Labels shifted.
+                [[1, 1, 1, 1, 1, 0, 0, 0]],
+            ),
+        )
+
     def test_preprocessor_basics(self):
         input_data = {
             "prompts": ["the quick brown fox <start_of_image>"],
